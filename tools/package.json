@@ -1,6 +1,7 @@
 {
 	"scripts": {
 		"Run": "lovec .",
-		"Build": "cd ../game && makelove --config ../tools/build/makelove.toml"
+		"build": "cd ../game && py -m makelove --config ../tools/build/makelove.toml",
+		"Build": "npm run build"
 	}
 }
