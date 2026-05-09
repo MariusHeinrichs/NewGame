@@ -1,4 +1,3 @@
-_G.love = require("love")
 love.graphics.setColor(1, 1, 1)
 
 function love.draw()
