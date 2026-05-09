@@ -1,3 +1,5 @@
+--- Unit class representing a game unit with health, damage, armor, speed, and size attributes.
+
 local Object = require("BaseClasses.object")
 
 local DEFAULTS = {
@@ -50,6 +52,15 @@ function Unit:Move(direction)
 		elseif direction == "right" then
 			self.Position.X = self.Position.X + self.Speed
 		end
+	end
+	self:UpdateHealthFromWindowBounds()
+end
+
+--- Sets Health to 0 when the unit leaves the current window.
+function Unit:UpdateHealthFromWindowBounds()
+	local width, height = love.graphics.getDimensions()
+	if self.Position.X < 0 or self.Position.X > width or self.Position.Y < 0 or self.Position.Y > height then
+		self.Health = 0
 	end
 end
 

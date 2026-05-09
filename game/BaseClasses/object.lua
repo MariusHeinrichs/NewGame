@@ -25,14 +25,13 @@ function Object:new(Name)
 end
 
 --- Sets the current location of the Object.
----@param x number
----@param y number
-function Object:Place(x, y)
-	if x then
-		self.Position.X = x
+---@param Position {X: number, Y: number}
+function Object:Place(Position)
+	if Position.X then
+		self.Position.X = Position.X
 	end
-	if y then
-		self.Position.Y = y
+	if Position.Y then
+		self.Position.Y = Position.Y
 	end
 end
 

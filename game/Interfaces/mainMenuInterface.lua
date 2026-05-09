@@ -7,17 +7,17 @@ local function onStartPressed(gameState)
 	gameState.Running = true
 end
 
---- @class MainMenuButtons
+--- @class MainMenuInterface
 --- @field StartButton Button
 --- @field SettingsButton Button
 --- @field QuitButton Button
-local MainMenuButtons = {}
-MainMenuButtons.__index = MainMenuButtons
+local MainMenuInterface = {}
+MainMenuInterface.__index = MainMenuInterface
 
---- Creates a new MainMenuButtons table.
+--- Creates a new MainMenuInterface table.
 ---@param gameState table The game state table to be modified by button actions.
----@return MainMenuButtons
-function MainMenuButtons:new(gameState)
+---@return MainMenuInterface
+function MainMenuInterface:new(gameState)
 	local width, height = love.graphics.getDimensions()
 	local newButtons = setmetatable({}, self)
 
@@ -48,7 +48,7 @@ function MainMenuButtons:new(gameState)
 end
 
 --- Draws all the Menu buttons
-function MainMenuButtons:Draw()
+function MainMenuInterface:Draw()
 	self.StartButton:Draw()
 	self.SettingsButton:Draw()
 	self.QuitButton:Draw()
@@ -58,11 +58,11 @@ end
 --- if a button is pressed, its associated action will be executed.
 ---@param PositionMouse {X: number, Y: number}
 ---@param CursorRadius number
-function MainMenuButtons:IsPressed(PositionMouse, CursorRadius)
+function MainMenuInterface:IsPressed(PositionMouse, CursorRadius)
 	self.StartButton:IsPressed(PositionMouse, CursorRadius)
 	self.SettingsButton:IsPressed(PositionMouse, CursorRadius)
 	self.QuitButton:IsPressed(PositionMouse, CursorRadius)
 end
 
 
-return MainMenuButtons
+return MainMenuInterface
