@@ -4,6 +4,7 @@ local World = require("world")
 local Resources = require("gameResources")
 local BattleInterface = require("Interfaces.battleInterface")
 local StructureRegistry = require("Objects.Structures.registry.structureRegistry")
+local EnemyBuilderAI = require("Systems.enemyBuilderAI")
 
 local MatchSetup = {}
 
@@ -40,11 +41,13 @@ end
 ---@return Resources
 ---@return BattleInterface
 ---@return boolean
+---@return EnemyBuilderAI
 function MatchSetup.CreateDefaultRuntimeState(startResources)
 	local world, resources = MatchSetup.CreateMatchState(startResources)
 	local battleInterface = BattleInterface:new(resources)
 	local hasInitializedMatch = false
-	return world, resources, battleInterface, hasInitializedMatch
+	local enemyBuilderAI = EnemyBuilderAI:new()
+	return world, resources, battleInterface, hasInitializedMatch, enemyBuilderAI
 end
 
 --- Places default starting structures for a new match.

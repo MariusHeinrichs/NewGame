@@ -8,7 +8,7 @@ local GameContext = require("src.gameContext")
 local GameInputRouter = require("src.gameInputRouter")
 
 local gameState = GameContext.GameState
----@type { World: World | nil, Resources: Resources | nil, HasInitializedMatch: boolean }
+---@type { World: World | nil, Resources: Resources | nil, HasInitializedMatch: boolean, EnemyBuilderAI: { Update: fun(self: table, dt: number): nil } | nil }
 local runtime = GameContext.Runtime
 ---@type { Battle: BattleInterface | nil, CombatOverlay: CombatOverlayInterface | nil, MainMenu: MainMenuInterface | nil, Pause: PauseInterface | nil, Start: StartInterface | nil }
 local interfaces = GameContext.Interfaces
@@ -34,6 +34,9 @@ function love.update(dt)
 		end
 		runtime.Resources:Update(dt)
 		interfaces.Battle:Update(dt)
+		if runtime.EnemyBuilderAI then
+			runtime.EnemyBuilderAI:Update(dt)
+		end
 		runtime.World:Update(dt)
 	end
 end

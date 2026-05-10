@@ -7,11 +7,13 @@ local GameStateTransitions = {}
 --- Resets runtime and battle interface for a fresh match.
 ---@param startResources {Gold: number, Metal: number, Aether: number} | nil
 function GameStateTransitions.ResetForNewMatch(startResources)
-	local world, resources, battleInterface, hasInitializedMatch = MatchSetup.CreateDefaultRuntimeState(startResources)
+	local world, resources, battleInterface, hasInitializedMatch, enemyBuilderAI = MatchSetup.CreateDefaultRuntimeState(
+		startResources)
 
 	GameContext.Runtime.World = world
 	GameContext.Runtime.Resources = resources
 	GameContext.Runtime.HasInitializedMatch = hasInitializedMatch
+	GameContext.Runtime.EnemyBuilderAI = enemyBuilderAI
 	GameContext.Interfaces.Battle = battleInterface
 end
 

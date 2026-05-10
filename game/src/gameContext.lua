@@ -8,6 +8,7 @@ local GameContext = {
 		World = nil,
 		Resources = nil,
 		HasInitializedMatch = false,
+		EnemyBuilderAI = nil,
 	},
 	Interfaces = {
 		Battle = nil,
