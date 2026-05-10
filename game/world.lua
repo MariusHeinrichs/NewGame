@@ -53,13 +53,17 @@ end
 ---@param resources Resources
 ---@param x number
 ---@param y number
+---@return boolean placed True when structure was successfully placed.
+---@return string | nil reason Failure reason code when placement fails.
 function World:PlaceStructure(selectedStructureType, resources, x, y)
 	local structureClass = StructureRegistry.GetByType(selectedStructureType)
-	local structure = StructurePlacement.PlaceStructure(structureClass, resources, self.Units,
+	local structure, reason = StructurePlacement.PlaceStructure(structureClass, resources, self.Units,
 		self.Structures, x, y)
 	if structure then
 		self:AddStructure(structure)
+		return true, nil
 	end
+	return false, reason
 end
 
 --- Updates all entities. Moves units, removes dead ones, spawns new ones from structures.

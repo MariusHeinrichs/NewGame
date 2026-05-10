@@ -1,60 +1,65 @@
 local MainMenuInterface = require("Interfaces.mainMenuInterface")
-local BattleInterface = require("Interfaces.battleInterface")
-local World = require("world")
-local Resources = require("gameResources")
-
-local world = World:new()
-local resources = Resources:new(100, 50, 10)
-local hasInitializedRunningWorld = false
+local MatchSetup = require("Systems.matchSetup")
+local GameStateModes = require("src.gameStateModes")
+local GameStateTransitions = require("src.gameStateTransitions")
 
 local gameState = {
-	StartMenu = true,
-	MainMenu = false,
-	Running = false,
+	Mode = GameStateModes.START,
 }
 
+---@type { World: World | nil, Resources: Resources | nil, HasInitializedMatch: boolean }
+local runtime = {
+	World = nil,
+	Resources = nil,
+	HasInitializedMatch = false,
+}
+
+---@type { Battle: BattleInterface | nil, MainMenu: MainMenuInterface | nil }
 local interfaces = {
+	Battle = nil,
+	MainMenu = nil,
 }
 
-local function initializeRunningWorld()
-	local width, height = love.graphics.getDimensions()
-	local townHallMargin = width * 0.1
-	world:PlaceStructure("TownHall", resources, townHallMargin, height / 2)
-	world:PlaceStructure("TownHall", resources, width - townHallMargin, height / 2)
-	hasInitializedRunningWorld = true
+local function resetRuntimeState()
+	local world, resources, battleInterface, hasInitializedMatch = MatchSetup.CreateDefaultRuntimeState()
+	runtime.World = world
+	runtime.Resources = resources
+	runtime.HasInitializedMatch = hasInitializedMatch
+	interfaces.Battle = battleInterface
 end
 
 function love.load()
 	love.graphics.setColor(1, 1, 1)
-	interfaces.MainMenu = MainMenuInterface:new(gameState)
-	interfaces.Battle = BattleInterface:new(resources)
+	interfaces.MainMenu = MainMenuInterface.new(MainMenuInterface, gameState, resetRuntimeState)
 end
 
 function love.update(dt)
-	if gameState.Running then
-		if not hasInitializedRunningWorld then
-			initializeRunningWorld()
+	if gameState.Mode == GameStateModes.RUNNING then
+		if not runtime.HasInitializedMatch then
+			MatchSetup.InitializeDefault(runtime.World, runtime.Resources)
+			runtime.HasInitializedMatch = true
 		end
-		world:Update(dt)
+		runtime.World:Update(dt)
 	end
 end
 
 function love.draw()
 	love.graphics.printf("FPS: " .. love.timer.getFPS(), 10, 10, 200, "left")
-	if gameState.StartMenu then
+	if gameState.Mode == GameStateModes.START then
 		local width, height = love.graphics.getDimensions()
 		local font = love.graphics.getFont()
-		love.graphics.printf("Press enter to start the game.",
-			width / 2 - font:getWidth("Press enter to start the game...") / 2, height / 2, width, "left")
+		local startPrompt = "Press enter to start the game."
+		love.graphics.printf(startPrompt,
+			width / 2 - font:getWidth(startPrompt) / 2, height / 2, width, "left")
 	end
 
-	if gameState.MainMenu then
+	if gameState.Mode == GameStateModes.MENU then
 		interfaces.MainMenu:Draw()
 	end
 
-	if gameState.Running then
+	if gameState.Mode == GameStateModes.RUNNING then
 		interfaces.Battle:Draw()
-		world:Draw()
+		runtime.World:Draw()
 	end
 end
 
@@ -63,16 +68,15 @@ function love.keypressed(key)
 		love.event.quit()
 	end
 
-	if gameState.StartMenu then
+	if gameState.Mode == GameStateModes.START then
 		if key == "return" then
-			gameState.StartMenu = false
-			gameState.MainMenu = true
+			GameStateTransitions.EnterMenu(gameState)
 		end
 	end
 end
 
 function love.mousepressed(x, y, button, istouch, presses)
-	if gameState.MainMenu then
+	if gameState.Mode == GameStateModes.MENU then
 		if button == 1 then
 			local uiClickHandled = interfaces.MainMenu:IsPressed({ X = x, Y = y }, 0)
 			if uiClickHandled then
@@ -81,11 +85,11 @@ function love.mousepressed(x, y, button, istouch, presses)
 		end
 	end
 
-	if gameState.Running then
+	if gameState.Mode == GameStateModes.RUNNING then
 		if button == 1 then
 			local uiClickHandled = interfaces.Battle:IsPressed({ X = x, Y = y }, 0)
 			if not uiClickHandled then
-				world:PlaceStructure(interfaces.Battle:GetSelectedStructureType(), resources, x, y)
+				runtime.World:PlaceStructure(interfaces.Battle:GetSelectedStructureType(), runtime.Resources, x, y)
 			end
 		end
 	end

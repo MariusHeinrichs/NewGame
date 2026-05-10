@@ -56,30 +56,31 @@ end
 ---@param x number
 ---@param y number
 ---@return Structure | nil The placed structure if successful, otherwise nil.
+---@return string | nil reason Failure reason code when placement fails.
 function StructurePlacement.PlaceStructure(structureClass, resources, units, structures, x, y)
 	if not structureClass then
-		return nil
+		return nil, "invalid_type"
 	end
 
 	if not isValidStructureClass(structureClass) then
-		return nil
+		return nil, "invalid_class"
 	end
 
 	if not resources or type(resources.Spend) ~= "function" then
-		return nil
+		return nil, "invalid_resources"
 	end
 
 	if not canPlaceStructureAt(units, structures, x, y, structureClass.Size) then
-		return nil
+		return nil, "blocked_by_collision"
 	end
 
 	if not resources:Spend(structureClass.Costs) then
-		return nil
+		return nil, "not_affordable"
 	end
 
 	local structure = structureClass:new()
 	structure:Place({ X = x, Y = y })
-	return structure
+	return structure, nil
 end
 
 return StructurePlacement

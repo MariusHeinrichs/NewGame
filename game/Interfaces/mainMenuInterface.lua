@@ -1,14 +1,14 @@
 --- MainMenuButtons module
 
 local Button = require("BaseClasses.button")
+local GameStateTransitions = require("src.gameStateTransitions")
 
 local BASE_BUTTON_WIDTH = 200
 local BASE_BUTTON_HEIGHT = 50
 local BASE_SPACING_Y = 60
 
-local function onStartButtonPressed(gameState)
-	gameState.MainMenu = false
-	gameState.Running = true
+local function onStartGamePressed(gameState, resetRuntimeState)
+	GameStateTransitions.EnterRunning(gameState, resetRuntimeState)
 end
 
 --- @class MainMenuInterface
@@ -20,12 +20,13 @@ MainMenuInterface.__index = MainMenuInterface
 
 --- Creates a new MainMenuInterface table.
 ---@param gameState table The game state table to be modified by button actions.
+---@param resetRuntimeState fun() | nil An optional callback function to reset runtime state when starting the game.
 ---@return MainMenuInterface
-function MainMenuInterface:new(gameState)
+function MainMenuInterface:new(gameState, resetRuntimeState)
 	local newButtons = setmetatable({}, self)
 
 	local definitions = {
-		{ key = "StartButton",    name = "Start",    text = "Start Game", action = function() onStartButtonPressed(gameState) end },
+		{ key = "StartButton",    name = "Start",    text = "Start Game", action = function() onStartGamePressed(gameState, resetRuntimeState) end },
 		{ key = "SettingsButton", name = "Settings", text = "Settings" },
 		{ key = "QuitButton",     name = "Quit",     text = "Quit Game",  action = function() love.event.quit() end },
 	}
