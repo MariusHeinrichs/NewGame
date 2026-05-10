@@ -23,7 +23,7 @@ end
 --- Enters running mode.
 function GameStateTransitions.EnterRunning()
 	if not GameContext.Runtime.World or not GameContext.Runtime.Resources or not GameContext.Interfaces.Battle then
-		GameStateTransitions.ResetForNewMatch()
+		GameStateTransitions.ResetForNewMatch({Gold = 999, Metal = 999, Aether = 999})
 	end
 	GameContext.GameState.Mode = GameStateModes.RUNNING
 end

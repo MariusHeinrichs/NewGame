@@ -254,11 +254,12 @@ function Unit:RefreshTarget(entities)
 	return self.CurrentTarget
 end
 
---- Attacks a target, dealing damage reduced by the target's armor.
+--- Executes the unit-specific attack behavior.
+--- Base Unit is abstract for attack execution and must be specialized.
 ---@param target Unit | Structure
-function Unit:Attack(target)
-	local dmg = math.max(1, self.Damage - (target.Armor or 0))
-	target.Health = target.Health - dmg
+---@param entities WorldEntities
+function Unit:PerformAttack(target, entities)
+	error("Unit:PerformAttack must be implemented by a subclass")
 end
 
 --- Returns an alternative nearby position when the direct path is blocked.
@@ -442,7 +443,7 @@ function Unit:UpdateCombat(dt, entities)
 	end
 
 	self.AttackTimer = 0
-	self:Attack(target)
+	self:PerformAttack(target, entities)
 end
 
 --- Draws the unit at its current position.

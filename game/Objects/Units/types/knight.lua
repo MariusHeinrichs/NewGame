@@ -1,18 +1,18 @@
 --- Knight unit — melee tank, high health and armor, slow attack speed.
 
-local Unit = require("Objects.Units.base.unit")
+local MeleeUnit = require("Objects.Units.base.meleeUnit")
 
----@class Knight : Unit
+---@class Knight : MeleeUnit
 local Knight = {}
 Knight.__index = Knight
 
-setmetatable(Knight, { __index = Unit })
+setmetatable(Knight, { __index = MeleeUnit })
 
 ---Creates a new Knight.
 ---@param name string | nil
 ---@return Knight
 function Knight:new(name)
-	return Unit.new(self, name,
+	return MeleeUnit.new(self, name,
 		200,  -- Health
 		12,   -- Damage
 		15,   -- Armor

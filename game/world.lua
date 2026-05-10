@@ -51,6 +51,7 @@ function World:Update(dt)
 	for _, unit in ipairs(units) do
 		unit:UpdateCombat(dt, self.Entities)
 	end
+	self.Entities:UpdateProjectiles(dt)
 	self.Entities:RemoveDeadUnits()
 
 	for _, structure in ipairs(structures) do
@@ -67,6 +68,9 @@ end
 function World:Draw()
 	for _, unit in ipairs(self.Entities:GetUnits()) do
 		unit:Draw()
+	end
+	for _, projectile in ipairs(self.Entities:GetProjectiles()) do
+		projectile:Draw()
 	end
 	for _, structure in ipairs(self.Entities:GetStructures()) do
 		structure:Draw()

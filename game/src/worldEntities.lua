@@ -4,6 +4,7 @@ local DEFAULT_CELL_SIZE = 128
 ---@class WorldEntities
 ---@field Units table
 ---@field Structures table
+---@field Projectiles table
 ---@field CellSize number
 ---@field SpatialCells table | nil
 ---@field MaxEntityRadius number
@@ -15,6 +16,7 @@ function WorldEntities:new()
 	return setmetatable({
 		Units = {},
 		Structures = {},
+		Projectiles = {},
 		CellSize = DEFAULT_CELL_SIZE,
 		SpatialCells = nil,
 		MaxEntityRadius = 0,
@@ -29,6 +31,11 @@ end
 ---@param structure table
 function WorldEntities:AddStructure(structure)
 	table.insert(self.Structures, structure)
+end
+
+---@param projectile table
+function WorldEntities:AddProjectile(projectile)
+	table.insert(self.Projectiles, projectile)
 end
 
 ---@param cellX number
@@ -87,6 +94,22 @@ end
 ---@return table
 function WorldEntities:GetStructures()
 	return self.Structures
+end
+
+---@return table
+function WorldEntities:GetProjectiles()
+	return self.Projectiles
+end
+
+---@param dt number
+function WorldEntities:UpdateProjectiles(dt)
+	for i = #self.Projectiles, 1, -1 do
+		local projectile = self.Projectiles[i]
+		projectile:Update(dt)
+		if not projectile:IsActive() then
+			table.remove(self.Projectiles, i)
+		end
+	end
 end
 
 ---@param sourceUnit table

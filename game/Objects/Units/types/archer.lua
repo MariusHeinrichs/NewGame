@@ -1,18 +1,18 @@
 --- Archer unit — ranged, fragile, fast attack speed.
 
-local Unit = require("Objects.Units.base.unit")
+local RangedUnit = require("Objects.Units.base.rangedUnit")
 
----@class Archer : Unit
+---@class Archer : RangedUnit
 local Archer = {}
 Archer.__index = Archer
 
-setmetatable(Archer, { __index = Unit })
+setmetatable(Archer, { __index = RangedUnit })
 
 ---Creates a new Archer.
 ---@param name string | nil
 ---@return Archer
 function Archer:new(name)
-	return Unit.new(self, name,
+	local instance = RangedUnit.new(self, name,
 		80,   -- Health
 		18,   -- Damage
 		3,    -- Armor
@@ -22,6 +22,12 @@ function Archer:new(name)
 		220,  -- AggroRange
 		1.5   -- AttackSpeed
 	)
+	instance.ProjectileSpeed = 320
+	instance.ProjectileRadius = 2.5
+	instance.SplashRadius = 0
+	instance.SplashDamageMultiplier = 0
+	instance.ProjectileStyle = "arrow"
+	return instance
 end
 
 return Archer
