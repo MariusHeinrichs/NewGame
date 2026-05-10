@@ -10,20 +10,92 @@ local STRUCTURE_BY_TYPE = {
 
 local StructurePlacement = {}
 
+--- Returns true if two axis-aligned rectangles overlap.
+---@param ax number
+---@param ay number
+---@param aw number
+---@param ah number
+---@param bx number
+---@param by number
+---@param bw number
+---@param bh number
+---@return boolean
+local function rectsOverlap(ax, ay, aw, ah, bx, by, bw, bh)
+	return ax < bx + bw and ax + aw > bx and ay < by + bh and ay + ah > by
+end
+
+--- Returns true if a circle intersects an axis-aligned rectangle.
+---@param cx number
+---@param cy number
+---@param radius number
+---@param rx number
+---@param ry number
+---@param rw number
+---@param rh number
+---@return boolean
+local function circleIntersectsRect(cx, cy, radius, rx, ry, rw, rh)
+	local closestX = math.max(rx, math.min(cx, rx + rw))
+	local closestY = math.max(ry, math.min(cy, ry + rh))
+	local dx = cx - closestX
+	local dy = cy - closestY
+	return (dx * dx + dy * dy) < (radius * radius)
+end
+
+---@param centerX number
+---@param centerY number
+---@param size number
+---@return number, number, number, number
+local function getStructureBounds(centerX, centerY, size)
+	local halfSize = size / 2
+	return centerX - halfSize, centerY - halfSize, size, size
+end
+
+--- Checks whether a structure can be placed without overlapping existing entities.
+---@param units table
+---@param structures table
+---@param x number
+---@param y number
+---@param size number
+---@return boolean
+local function canPlaceStructureAt(units, structures, x, y, size)
+	local targetX, targetY, targetW, targetH = getStructureBounds(x, y, size)
+
+	for _, structure in ipairs(structures) do
+		local sx, sy, sw, sh = getStructureBounds(structure.Position.X, structure.Position.Y, structure.Size)
+		if rectsOverlap(targetX, targetY, targetW, targetH, sx, sy, sw, sh) then
+			return false
+		end
+	end
+
+	for _, unit in ipairs(units) do
+		if circleIntersectsRect(unit.Position.X, unit.Position.Y, unit.Size, targetX, targetY, targetW, targetH) then
+			return false
+		end
+	end
+
+	return true
+end
+
 --- Places the currently selected structure type at the given position.
---- Returns nil if the type is unknown or the player cannot afford it.
+--- Returns nil if the type is unknown or the player cannot afford it or the position is invalid.
 ---@param selectedStructureType string | nil
 ---@param resources Resources
+---@param units table
+---@param structures table
 ---@param x number
 ---@param y number
 ---@return Structure | nil The placed structure if successful, otherwise nil.
-function StructurePlacement.PlaceSelectedStructure(selectedStructureType, resources, x, y)
+function StructurePlacement.PlaceSelectedStructure(selectedStructureType, resources, units, structures, x, y)
 	if not selectedStructureType then
 		return nil
 	end
 
 	local selected = STRUCTURE_BY_TYPE[selectedStructureType]
 	if not selected then
+		return nil
+	end
+
+	if not canPlaceStructureAt(units, structures, x, y, selected.Size) then
 		return nil
 	end
 

@@ -39,20 +39,32 @@ function Unit:new(Name, Health, Damage, Armor, Speed, Size)
 	return newUnit
 end
 
--- Moves the unit in the specified direction, by its Speed value.
+--- Returns the next position for the given direction without applying it.
 ---@param direction "up" | "down" | "left" | "right"
-function Unit:Move(direction)
-	if direction then
-		if direction == "up" then
-			self.Position.Y = self.Position.Y - self.Speed
-		elseif direction == "down" then
-			self.Position.Y = self.Position.Y + self.Speed
-		elseif direction == "left" then
-			self.Position.X = self.Position.X - self.Speed
-		elseif direction == "right" then
-			self.Position.X = self.Position.X + self.Speed
-		end
+---@return number, number
+function Unit:GetNextPosition(direction)
+	local nextX = self.Position.X
+	local nextY = self.Position.Y
+
+	if direction == "up" then
+		nextY = nextY - self.Speed
+	elseif direction == "down" then
+		nextY = nextY + self.Speed
+	elseif direction == "left" then
+		nextX = nextX - self.Speed
+	elseif direction == "right" then
+		nextX = nextX + self.Speed
 	end
+
+	return nextX, nextY
+end
+
+--- Moves the unit to an absolute position.
+---@param x number
+---@param y number
+function Unit:MoveTo(x, y)
+	self.Position.X = x
+	self.Position.Y = y
 	self:UpdateHealthFromWindowBounds()
 end
 

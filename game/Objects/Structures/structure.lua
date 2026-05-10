@@ -63,7 +63,8 @@ function Structure:SpawnUnit(dt)
 	if self.SpawnTimer >= self.SpawnRate then
 		self.SpawnTimer = self.SpawnTimer - self.SpawnRate
 		local spawnedUnit = Unit:new(self.Name .. "_Unit", 50, 5, 2, 1, 5)
-		spawnedUnit:Place({ X = self.Position.X, Y = self.Position.Y })
+		local spawnOffset = (self.Size / 2) + spawnedUnit.Size + 1
+		spawnedUnit:Place({ X = self.Position.X + spawnOffset, Y = self.Position.Y })
 		return spawnedUnit
 	end
 	return nil
