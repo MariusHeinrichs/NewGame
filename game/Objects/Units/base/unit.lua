@@ -1,4 +1,4 @@
---- Unit class representing a game unit with health, damage, armor, speed, and size attributes.
+--- Unit class representing a game unit with health, damage, armor, speed, size, range, and attack speed attributes.
 
 local Object = require("BaseClasses.object")
 
@@ -8,6 +8,8 @@ local DEFAULTS = {
 	Armor = 5,
 	Speed = 2,
 	Size = 10,
+	Range = 50,
+	AttackSpeed = 1,
 }
 
 ---@class Unit : Object
@@ -16,26 +18,34 @@ local DEFAULTS = {
 ---@field Armor number
 ---@field Speed number
 ---@field Size number
+---@field Range number
+---@field AttackSpeed number
 local Unit = {}
 Unit.__index = Unit
 
 setmetatable(Unit, { __index = Object })
 
 ---Creates a new Unit.
+---@generic T : Unit
+---@param self T
 ---@param Name string | nil
 ---@param Health number | nil
 ---@param Damage number | nil
 ---@param Armor number | nil
 ---@param Speed number | nil
 ---@param Size number | nil
----@return Unit
-function Unit:new(Name, Health, Damage, Armor, Speed, Size)
+---@param Range number | nil
+---@param AttackSpeed number | nil
+---@return T
+function Unit:new(Name, Health, Damage, Armor, Speed, Size, Range, AttackSpeed)
 	local newUnit = Object.new(self, Name)
 	newUnit.Health = Health or DEFAULTS.Health
 	newUnit.Damage = Damage or DEFAULTS.Damage
 	newUnit.Armor = Armor or DEFAULTS.Armor
 	newUnit.Speed = Speed or DEFAULTS.Speed
 	newUnit.Size = Size or DEFAULTS.Size
+	newUnit.Range = Range or DEFAULTS.Range
+	newUnit.AttackSpeed = AttackSpeed or DEFAULTS.AttackSpeed
 	return newUnit
 end
 

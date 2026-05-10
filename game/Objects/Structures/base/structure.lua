@@ -1,8 +1,6 @@
 --- Structure class representing a game structure with health, armor, and size attributes.
 
 local Object = require("BaseClasses.object")
-local Unit = require("Objects.Units.unit")
-
 local DEFAULTS = {
 	Health = 100,
 	Armor = 5,
@@ -19,19 +17,22 @@ local DEFAULTS = {
 ---@field SpawnRate number
 ---@field SpawnTimer number
 ---@field Costs table
+---@field UnitClass table | nil
 local Structure = {}
 Structure.__index = Structure
 
 setmetatable(Structure, { __index = Object })
 
 ---Creates a new Structure.
+---@generic T : Structure
+---@param self T
 ---@param Name string | nil
 ---@param Health number | nil
 ---@param Armor number | nil
 ---@param Size number | nil
 ---@param SpawnRate number | nil
 ---@param Costs table | nil
----@return Structure
+---@return T
 function Structure:new(Name, Health, Armor, Size, SpawnRate, Costs)
 	local newStructure = Object.new(self, Name)
 	newStructure.Health = Health or DEFAULTS.Health
@@ -58,11 +59,14 @@ function Structure:SpawnUnit(dt)
 	if self.SpawnRate <= 0 then
 		return nil
 	end
+	if not self.UnitClass then
+		return nil
+	end
 
 	self.SpawnTimer = self.SpawnTimer + dt
 	if self.SpawnTimer >= self.SpawnRate then
 		self.SpawnTimer = self.SpawnTimer - self.SpawnRate
-		local spawnedUnit = Unit:new(self.Name .. "_Unit", 50, 5, 2, 1, 5)
+		local spawnedUnit = self.UnitClass:new(self.Name .. "_Unit")
 		local spawnOffset = (self.Size / 2) + spawnedUnit.Size + 1
 		spawnedUnit:Place({ X = self.Position.X + spawnOffset, Y = self.Position.Y })
 		return spawnedUnit

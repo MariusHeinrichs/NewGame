@@ -5,6 +5,7 @@ local Resources = require("gameResources")
 
 local world = World:new()
 local resources = Resources:new(100, 50, 10)
+local hasInitializedRunningWorld = false
 
 local gameState = {
 	StartMenu = true,
@@ -15,6 +16,14 @@ local gameState = {
 local interfaces = {
 }
 
+local function initializeRunningWorld()
+	local width, height = love.graphics.getDimensions()
+	local townHallMargin = width * 0.1
+	world:PlaceStructure("TownHall", resources, townHallMargin, height / 2)
+	world:PlaceStructure("TownHall", resources, width - townHallMargin, height / 2)
+	hasInitializedRunningWorld = true
+end
+
 function love.load()
 	love.graphics.setColor(1, 1, 1)
 	interfaces.MainMenu = MainMenuInterface:new(gameState)
@@ -23,6 +32,9 @@ end
 
 function love.update(dt)
 	if gameState.Running then
+		if not hasInitializedRunningWorld then
+			initializeRunningWorld()
+		end
 		world:Update(dt)
 	end
 end
@@ -41,10 +53,6 @@ function love.draw()
 	end
 
 	if gameState.Running then
-		local width, height = love.graphics.getDimensions()
-		local townHallMargin = width * 0.1
-		world:PlaceStructure("TownHall", resources, townHallMargin, height / 2)
-		world:PlaceStructure("TownHall", resources, width - townHallMargin, height / 2)
 		interfaces.Battle:Draw()
 		world:Draw()
 	end
@@ -66,7 +74,10 @@ end
 function love.mousepressed(x, y, button, istouch, presses)
 	if gameState.MainMenu then
 		if button == 1 then
-			interfaces.MainMenu:IsPressed({ X = x, Y = y }, 0)
+			local uiClickHandled = interfaces.MainMenu:IsPressed({ X = x, Y = y }, 0)
+			if uiClickHandled then
+				return
+			end
 		end
 	end
 
@@ -77,5 +88,14 @@ function love.mousepressed(x, y, button, istouch, presses)
 				world:PlaceStructure(interfaces.Battle:GetSelectedStructureType(), resources, x, y)
 			end
 		end
+	end
+end
+
+function love.resize(w, h)
+	if interfaces.MainMenu then
+		interfaces.MainMenu:RebuildLayout()
+	end
+	if interfaces.Battle then
+		interfaces.Battle:RebuildLayout()
 	end
 end
