@@ -1,5 +1,6 @@
 local MainMenuInterface = require("Interfaces.mainMenuInterface")
 local PauseInterface = require("Interfaces.pauseInterface")
+local StartInterface = require("Interfaces.startInterface")
 local MatchSetup = require("Systems.matchSetup")
 local GameStateModes = require("src.gameStateModes")
 local GameContext = require("src.gameContext")
@@ -8,11 +9,12 @@ local GameInputRouter = require("src.gameInputRouter")
 local gameState = GameContext.GameState
 ---@type { World: World | nil, Resources: Resources | nil, HasInitializedMatch: boolean }
 local runtime = GameContext.Runtime
----@type { Battle: BattleInterface | nil, MainMenu: MainMenuInterface | nil, Pause: PauseInterface | nil }
+---@type { Battle: BattleInterface | nil, MainMenu: MainMenuInterface | nil, Pause: PauseInterface | nil, Start: StartInterface | nil }
 local interfaces = GameContext.Interfaces
 
 function love.load()
 	love.graphics.setColor(1, 1, 1)
+	interfaces.Start = StartInterface:new()
 	interfaces.MainMenu = MainMenuInterface:new()
 	interfaces.Pause = PauseInterface:new()
 	GameInputRouter.InitializeHandlers()
@@ -37,11 +39,9 @@ function love.draw()
 	love.graphics.printf("FPS: " .. love.timer.getFPS(), 10, 10, 200, "left")
 
 	if gameState.Mode == GameStateModes.START then
-		local width, height = love.graphics.getDimensions()
-		local font = love.graphics.getFont()
-		local startPrompt = "Press enter to start the game."
-		love.graphics.printf(startPrompt,
-			width / 2 - font:getWidth(startPrompt) / 2, height / 2, width, "left")
+		if interfaces.Start then
+			interfaces.Start:Draw()
+		end
 	end
 
 	if gameState.Mode == GameStateModes.MENU then
@@ -65,6 +65,9 @@ function love.draw()
 end
 
 function love.resize(w, h)
+	if interfaces.Start then
+		interfaces.Start:RebuildLayout()
+	end
 	if interfaces.MainMenu then
 		interfaces.MainMenu:RebuildLayout()
 	end

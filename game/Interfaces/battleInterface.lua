@@ -52,6 +52,9 @@ local function getPlacementFailureMessage(reason)
 	if reason == "blocked_by_collision" then
 		return "Platzierung blockiert: Zu nah an Einheiten oder Strukturen."
 	end
+	if reason == "out_of_bounds" then
+		return "Platzierung ausserhalb der Karte ist nicht erlaubt."
+	end
 	if reason == "not_affordable" then
 		return "Nicht genug Ressourcen fuer diese Struktur."
 	end

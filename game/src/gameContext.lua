@@ -11,6 +11,7 @@ local GameContext = {
 	},
 	Interfaces = {
 		Battle = nil,
+		Start = nil,
 		MainMenu = nil,
 		Pause = nil,
 	},

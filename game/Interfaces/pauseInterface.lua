@@ -1,6 +1,7 @@
 --- PauseInterface module
 
 local Button = require("BaseClasses.button")
+local Text = require("BaseClasses.text")
 local GameStateTransitions = require("src.gameStateTransitions")
 
 local BASE_BUTTON_WIDTH = 220
@@ -11,6 +12,8 @@ local BASE_SPACING_Y = 64
 --- @field ResumeButton Button
 --- @field MenuButton Button
 --- @field QuitButton Button
+--- @field TitleText Text
+--- @field SubtitleText Text
 local PauseInterface = {}
 PauseInterface.__index = PauseInterface
 
@@ -44,6 +47,9 @@ function PauseInterface:new()
 			{ X = 0, Y = 15 }
 		)
 	end
+
+	pauseInterface.TitleText = Text:new("Paused", { X = 0, Y = 0 }, 0, "center", { 1, 1, 1, 1 })
+	pauseInterface.SubtitleText = Text:new("Press ESC to resume", { X = 0, Y = 0 }, 0, "center", { 1, 1, 1, 1 })
 
 	pauseInterface:RebuildLayout()
 	return pauseInterface
@@ -80,6 +86,14 @@ function PauseInterface:RebuildLayout()
 	self.QuitButton.PositionText.Y = textOffsetY
 	self.QuitButton.PositionButton.X = centerX
 	self.QuitButton.PositionButton.Y = startY + (2 * spacingY)
+
+	self.TitleText.Position.X = 0
+	self.TitleText.Position.Y = height / 2 - 130
+	self.TitleText.Width = width
+
+	self.SubtitleText.Position.X = 0
+	self.SubtitleText.Position.Y = height / 2 - 100
+	self.SubtitleText.Width = width
 end
 
 --- Draws pause overlay and buttons.
@@ -87,13 +101,8 @@ function PauseInterface:Draw()
 	local width, height = love.graphics.getDimensions()
 	love.graphics.setColor(0, 0, 0, 0.35)
 	love.graphics.rectangle("fill", 0, 0, width, height)
-	love.graphics.setColor(1, 1, 1, 1)
-
-	local title = "Paused"
-	local subtitle = "Press ESC to resume"
-	local font = love.graphics.getFont()
-	love.graphics.printf(title, width / 2 - font:getWidth(title) / 2, height / 2 - 130, width, "left")
-	love.graphics.printf(subtitle, width / 2 - font:getWidth(subtitle) / 2, height / 2 - 100, width, "left")
+	self.TitleText:Draw()
+	self.SubtitleText:Draw()
 
 	self.ResumeButton:Draw()
 	self.MenuButton:Draw()

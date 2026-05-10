@@ -28,23 +28,29 @@ end
 ---@param y number
 ---@param size number
 ---@return boolean
+---@return string | nil
 local function canPlaceStructureAt(units, structures, x, y, size)
 	local targetX, targetY, targetW, targetH = Collisions.GetRectBounds(x, y, size)
+	local width, height = love.graphics.getDimensions()
+
+	if targetX < 0 or targetY < 0 or targetX + targetW > width or targetY + targetH > height then
+		return false, "out_of_bounds"
+	end
 
 	for _, structure in ipairs(structures) do
 		local sx, sy, sw, sh = Collisions.GetRectBounds(structure.Position.X, structure.Position.Y, structure.Size)
 		if Collisions.RectsOverlap(targetX, targetY, targetW, targetH, sx, sy, sw, sh) then
-			return false
+			return false, "blocked_by_collision"
 		end
 	end
 
 	for _, unit in ipairs(units) do
 		if Collisions.CircleIntersectsRect(unit.Position.X, unit.Position.Y, unit.Size, targetX, targetY, targetW, targetH) then
-			return false
+			return false, "blocked_by_collision"
 		end
 	end
 
-	return true
+	return true, nil
 end
 
 --- Places a structure of the given class at the given position.
@@ -70,8 +76,9 @@ function StructurePlacement.PlaceStructure(structureClass, resources, units, str
 		return nil, "invalid_resources"
 	end
 
-	if not canPlaceStructureAt(units, structures, x, y, structureClass.Size) then
-		return nil, "blocked_by_collision"
+	local canPlace, placementReason = canPlaceStructureAt(units, structures, x, y, structureClass.Size)
+	if not canPlace then
+		return nil, placementReason
 	end
 
 	if not resources:Spend(structureClass.Costs) then

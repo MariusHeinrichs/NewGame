@@ -22,6 +22,9 @@ end
 
 --- Enters running mode.
 function GameStateTransitions.EnterRunning()
+	if not GameContext.Runtime.World or not GameContext.Runtime.Resources or not GameContext.Interfaces.Battle then
+		GameStateTransitions.ResetForNewMatch()
+	end
 	GameContext.GameState.Mode = GameStateModes.RUNNING
 end
 
