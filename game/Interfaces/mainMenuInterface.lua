@@ -7,8 +7,9 @@ local BASE_BUTTON_WIDTH = 200
 local BASE_BUTTON_HEIGHT = 50
 local BASE_SPACING_Y = 60
 
-local function onStartGamePressed(gameState, resetRuntimeState)
-	GameStateTransitions.EnterRunning(gameState, resetRuntimeState)
+local function onStartGamePressed()
+	GameStateTransitions.ResetForNewMatch()
+	GameStateTransitions.EnterRunning()
 end
 
 --- @class MainMenuInterface
@@ -19,14 +20,12 @@ local MainMenuInterface = {}
 MainMenuInterface.__index = MainMenuInterface
 
 --- Creates a new MainMenuInterface table.
----@param gameState table The game state table to be modified by button actions.
----@param resetRuntimeState fun() | nil An optional callback function to reset runtime state when starting the game.
 ---@return MainMenuInterface
-function MainMenuInterface:new(gameState, resetRuntimeState)
+function MainMenuInterface:new()
 	local newButtons = setmetatable({}, self)
 
 	local definitions = {
-		{ key = "StartButton",    name = "Start",    text = "Start Game", action = function() onStartGamePressed(gameState, resetRuntimeState) end },
+		{ key = "StartButton",    name = "Start",    text = "Start Game", action = function() onStartGamePressed() end },
 		{ key = "SettingsButton", name = "Settings", text = "Settings" },
 		{ key = "QuitButton",     name = "Quit",     text = "Quit Game",  action = function() love.event.quit() end },
 	}
@@ -107,6 +106,18 @@ function MainMenuInterface:IsPressed(PositionMouse, CursorRadius)
 		return true
 	end
 	return false
+end
+
+--- Handles a raw mouse press event for the menu.
+---@param x number
+---@param y number
+---@param button number
+---@return boolean True if a menu button handled the click.
+function MainMenuInterface:HandleMousePressed(x, y, button)
+	if button ~= 1 then
+		return false
+	end
+	return self:IsPressed({ X = x, Y = y }, 0)
 end
 
 

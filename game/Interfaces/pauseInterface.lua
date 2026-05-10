@@ -14,23 +14,22 @@ local BASE_SPACING_Y = 64
 local PauseInterface = {}
 PauseInterface.__index = PauseInterface
 
-local function onResumePressed(gameState)
-	GameStateTransitions.EnterRunning(gameState)
+local function onResumePressed()
+	GameStateTransitions.EnterRunning()
 end
 
-local function onMenuPressed(gameState)
-	GameStateTransitions.EnterMenu(gameState)
+local function onMenuPressed()
+	GameStateTransitions.EnterMenu()
 end
 
 --- Creates a new PauseInterface table.
----@param gameState {Mode: string}
 ---@return PauseInterface
-function PauseInterface:new(gameState)
+function PauseInterface:new()
 	local pauseInterface = setmetatable({}, self)
 
 	local definitions = {
-		{ key = "ResumeButton", text = "Resume", action = function() onResumePressed(gameState) end },
-		{ key = "MenuButton", text = "Main Menu", action = function() onMenuPressed(gameState) end },
+		{ key = "ResumeButton", text = "Resume", action = function() onResumePressed() end },
+		{ key = "MenuButton", text = "Main Menu", action = function() onMenuPressed() end },
 		{ key = "QuitButton", text = "Quit Game", action = function() love.event.quit() end },
 	}
 
@@ -116,6 +115,18 @@ function PauseInterface:IsPressed(PositionMouse, CursorRadius)
 		return true
 	end
 	return false
+end
+
+--- Handles a raw mouse press event for pause UI.
+---@param x number
+---@param y number
+---@param button number
+---@return boolean True if a pause button handled the click.
+function PauseInterface:HandleMousePressed(x, y, button)
+	if button ~= 1 then
+		return false
+	end
+	return self:IsPressed({ X = x, Y = y }, 0)
 end
 
 return PauseInterface

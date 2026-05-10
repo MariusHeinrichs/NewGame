@@ -2,42 +2,28 @@ local MainMenuInterface = require("Interfaces.mainMenuInterface")
 local PauseInterface = require("Interfaces.pauseInterface")
 local MatchSetup = require("Systems.matchSetup")
 local GameStateModes = require("src.gameStateModes")
-local GameStateTransitions = require("src.gameStateTransitions")
+local GameContext = require("src.gameContext")
+local GameInputRouter = require("src.gameInputRouter")
 
-local gameState = {
-	Mode = GameStateModes.START,
-}
-
+local gameState = GameContext.GameState
 ---@type { World: World | nil, Resources: Resources | nil, HasInitializedMatch: boolean }
-local runtime = {
-	World = nil,
-	Resources = nil,
-	HasInitializedMatch = false,
-}
-
----@type { Battle: BattleInterface | nil, MainMenu: MainMenuInterface | nil, Pause: any }
-local interfaces = {
-	Battle = nil,
-	MainMenu = nil,
-	Pause = nil,
-}
-
-local function resetRuntimeState()
-	local world, resources, battleInterface, hasInitializedMatch = MatchSetup.CreateDefaultRuntimeState()
-	runtime.World = world
-	runtime.Resources = resources
-	runtime.HasInitializedMatch = hasInitializedMatch
-	interfaces.Battle = battleInterface
-end
+local runtime = GameContext.Runtime
+---@type { Battle: BattleInterface | nil, MainMenu: MainMenuInterface | nil, Pause: PauseInterface | nil }
+local interfaces = GameContext.Interfaces
 
 function love.load()
 	love.graphics.setColor(1, 1, 1)
-	interfaces.MainMenu = MainMenuInterface.new(MainMenuInterface, gameState, resetRuntimeState)
-	interfaces.Pause = PauseInterface.new(PauseInterface, gameState)
+	interfaces.MainMenu = MainMenuInterface:new()
+	interfaces.Pause = PauseInterface:new()
+	GameInputRouter.InitializeHandlers()
 end
 
 function love.update(dt)
 	if gameState.Mode == GameStateModes.RUNNING then
+		if not runtime.World or not runtime.Resources or not interfaces.Battle then
+			return
+		end
+
 		if not runtime.HasInitializedMatch then
 			MatchSetup.InitializeDefault(runtime.World, runtime.Resources)
 			runtime.HasInitializedMatch = true
@@ -63,72 +49,18 @@ function love.draw()
 	end
 
 	if gameState.Mode == GameStateModes.RUNNING then
-		runtime.World:Draw()
-		interfaces.Battle:Draw()
+		if runtime.World and interfaces.Battle then
+			runtime.World:Draw()
+			interfaces.Battle:Draw()
+		end
 	end
 
 	if gameState.Mode == GameStateModes.PAUSE then
-		runtime.World:Draw()
-		interfaces.Battle:Draw()
+		if runtime.World and interfaces.Battle then
+			runtime.World:Draw()
+			interfaces.Battle:Draw()
+		end
 		interfaces.Pause:Draw()
-	end
-end
-
-function love.keypressed(key)
-	if key == "escape" and gameState.Mode == GameStateModes.RUNNING then
-		GameStateTransitions.EnterPause(gameState)
-		return
-	end
-
-	if key == "escape" and gameState.Mode == GameStateModes.PAUSE then
-		GameStateTransitions.EnterRunning(gameState)
-		return
-	end
-
-	if key == "escape" and gameState.Mode == GameStateModes.START then
-		love.event.quit()
-		return
-	end
-
-	if key == "escape" and gameState.Mode == GameStateModes.MENU then
-		GameStateTransitions.EnterStart(gameState)
-		return
-	end
-
-	if gameState.Mode == GameStateModes.START then
-		if key == "return" then
-			GameStateTransitions.EnterMenu(gameState)
-		end
-	end
-end
-
-function love.mousepressed(x, y, button, istouch, presses)
-	if gameState.Mode == GameStateModes.MENU then
-		if button == 1 then
-			local uiClickHandled = interfaces.MainMenu:IsPressed({ X = x, Y = y }, 0)
-			if uiClickHandled then
-				return
-			end
-		end
-	end
-
-	if gameState.Mode == GameStateModes.RUNNING then
-		if button == 1 then
-			local uiClickHandled = interfaces.Battle:IsPressed({ X = x, Y = y }, 0)
-			if not uiClickHandled then
-				local placed, reason = runtime.World:PlaceStructure(interfaces.Battle:GetSelectedStructureType(), runtime.Resources,
-					x, y)
-				if not placed then
-					interfaces.Battle:ShowPlacementFailure(reason)
-				end
-			end
-		end
-	end
-
-	if gameState.Mode == GameStateModes.PAUSE then
-		if button == 1 then
-			interfaces.Pause:IsPressed({ X = x, Y = y }, 0)
-		end
 	end
 end
 

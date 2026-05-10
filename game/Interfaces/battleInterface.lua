@@ -1,6 +1,7 @@
 --- BattleInterface module
 
 local Button = require("BaseClasses.button")
+local GameContext = require("src.gameContext")
 
 local BASE_BUTTON_WIDTH = 170
 local BASE_BUTTON_HEIGHT = 50
@@ -196,6 +197,35 @@ function BattleInterface:IsPressed(PositionMouse, CursorRadius)
 		return true
 	end
 	return false
+end
+
+--- Handles a raw mouse press event for battle UI and structure placement.
+---@param x number
+---@param y number
+---@param button number
+---@return boolean True when any click path was processed.
+function BattleInterface:HandleMousePressed(x, y, button)
+	if button ~= 1 then
+		return false
+	end
+
+	local uiClickHandled = self:IsPressed({ X = x, Y = y }, 0)
+	if uiClickHandled then
+		return true
+	end
+
+	local world = GameContext.Runtime.World
+	local resources = GameContext.Runtime.Resources
+	if not world or not resources then
+		self:ShowPlacementFailure("invalid_resources")
+		return true
+	end
+
+	local placed, reason = world:PlaceStructure(self:GetSelectedStructureType(), resources, x, y)
+	if not placed then
+		self:ShowPlacementFailure(reason)
+	end
+	return true
 end
 
 ---@return string | nil
