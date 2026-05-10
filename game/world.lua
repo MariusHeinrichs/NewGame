@@ -5,27 +5,13 @@ local StructureRegistry = require("Objects.Structures.registry.structureRegistry
 local WorldEntities = require("src.worldEntities")
 
 ---@class World
----@field Units table
----@field Structures table
 ---@field Entities WorldEntities
 local World = {}
 World.__index = World
 
 ---@return World
 function World:new()
-	local units = {}
-	local structures = {}
-	return setmetatable({ Units = units, Structures = structures, Entities = WorldEntities:new(units, structures) }, self)
-end
-
----@param unit Unit
-function World:AddUnit(unit)
-	table.insert(self.Units, unit)
-end
-
----@param structure Structure
-function World:AddStructure(structure)
-	table.insert(self.Structures, structure)
+	return setmetatable({ Entities = WorldEntities:new() }, self)
 end
 
 --- Places a structure of the given type at the given position, if a type is selected.
@@ -40,7 +26,7 @@ function World:PlaceStructure(selectedStructureType, resources, x, y, team)
 	local structureClass = StructureRegistry.GetByType(selectedStructureType)
 	local structure, reason = StructurePlacement.PlaceStructure(structureClass, resources, self.Entities, x, y, team)
 	if structure then
-		self:AddStructure(structure)
+		self.Entities:AddStructure(structure)
 		return true, nil
 	end
 	return false, reason
@@ -49,9 +35,12 @@ end
 --- Updates all entities. Moves units, removes dead ones, spawns new ones from structures.
 ---@param dt number
 function World:Update(dt)
+	local units = self.Entities:GetUnits()
+	local structures = self.Entities:GetStructures()
+
 	self.Entities:RebuildSpatialIndex()
 
-	for _, unit in ipairs(self.Units) do
+	for _, unit in ipairs(units) do
 		local nextX, nextY = unit:CalculateNextPosition(self.Entities)
 		unit:MoveTo(nextX, nextY)
 	end
@@ -59,15 +48,15 @@ function World:Update(dt)
 	self.Entities:RemoveDeadUnits()
 	self.Entities:RebuildSpatialIndex()
 
-	for _, unit in ipairs(self.Units) do
+	for _, unit in ipairs(units) do
 		unit:UpdateCombat(dt, self.Entities)
 	end
 	self.Entities:RemoveDeadUnits()
 
-	for _, structure in ipairs(self.Structures) do
+	for _, structure in ipairs(structures) do
 		local spawnedUnit = structure:SpawnUnit(dt)
 		if spawnedUnit then
-			self:AddUnit(spawnedUnit)
+			self.Entities:AddUnit(spawnedUnit)
 		end
 	end
 
@@ -76,10 +65,10 @@ end
 
 --- Draws all entities.
 function World:Draw()
-	for _, unit in ipairs(self.Units) do
+	for _, unit in ipairs(self.Entities:GetUnits()) do
 		unit:Draw()
 	end
-	for _, structure in ipairs(self.Structures) do
+	for _, structure in ipairs(self.Entities:GetStructures()) do
 		structure:Draw()
 	end
 end

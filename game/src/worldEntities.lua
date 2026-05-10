@@ -10,17 +10,25 @@ local DEFAULT_CELL_SIZE = 128
 local WorldEntities = {}
 WorldEntities.__index = WorldEntities
 
----@param units table
----@param structures table
 ---@return WorldEntities
-function WorldEntities:new(units, structures)
+function WorldEntities:new()
 	return setmetatable({
-		Units = units,
-		Structures = structures,
+		Units = {},
+		Structures = {},
 		CellSize = DEFAULT_CELL_SIZE,
 		SpatialCells = nil,
 		MaxEntityRadius = 0,
 	}, self)
+end
+
+---@param unit table
+function WorldEntities:AddUnit(unit)
+	table.insert(self.Units, unit)
+end
+
+---@param structure table
+function WorldEntities:AddStructure(structure)
+	table.insert(self.Structures, structure)
 end
 
 ---@param cellX number
