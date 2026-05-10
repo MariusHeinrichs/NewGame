@@ -55,6 +55,10 @@ end
 ---@param dt number The delta time since the last update, used to manage spawn timing.
 ---@return Unit | nil The spawned unit if the spawn condition is met, otherwise nil.
 function Structure:SpawnUnit(dt)
+	if self.SpawnRate <= 0 then
+		return nil
+	end
+
 	self.SpawnTimer = self.SpawnTimer + dt
 	if self.SpawnTimer >= self.SpawnRate then
 		self.SpawnTimer = self.SpawnTimer - self.SpawnRate

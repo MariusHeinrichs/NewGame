@@ -1,8 +1,7 @@
-local Structure = require("Objects.Structures.structure")
 local MainMenuInterface = require("Interfaces.mainMenuInterface")
 local BattleInterface = require("Interfaces.battleInterface")
 local World = require("world")
-local Resources = require("resources")
+local Resources = require("gameResources")
 
 local world = World:new()
 local resources = Resources:new(100, 50, 10)
@@ -30,7 +29,6 @@ end
 
 function love.draw()
 	love.graphics.printf("FPS: " .. love.timer.getFPS(), 10, 10, 200, "left")
-
 	if gameState.StartMenu then
 		local width, height = love.graphics.getDimensions()
 		local font = love.graphics.getFont()
@@ -43,6 +41,10 @@ function love.draw()
 	end
 
 	if gameState.Running then
+		local width, height = love.graphics.getDimensions()
+		local townHallMargin = width * 0.1
+		world:PlaceStructure("TownHall", resources, townHallMargin, height / 2)
+		world:PlaceStructure("TownHall", resources, width - townHallMargin, height / 2)
 		interfaces.Battle:Draw()
 		world:Draw()
 	end
