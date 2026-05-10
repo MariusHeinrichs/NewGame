@@ -25,10 +25,11 @@ end
 
 --- Places a structure of the given type at the given position, if a type is selected.
 ---@param selectedStructureType string | nil
+---@param resources Resources
 ---@param x number
 ---@param y number
-function World:PlaceStructure(selectedStructureType, x, y)
-	local structure = StructurePlacement.PlaceSelectedStructure(selectedStructureType, x, y)
+function World:PlaceStructure(selectedStructureType, resources, x, y)
+	local structure = StructurePlacement.PlaceSelectedStructure(selectedStructureType, resources, x, y)
 	if structure then
 		self:AddStructure(structure)
 	end

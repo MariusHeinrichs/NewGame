@@ -2,8 +2,10 @@ local Structure = require("Objects.Structures.structure")
 local MainMenuInterface = require("Interfaces.mainMenuInterface")
 local BattleInterface = require("Interfaces.battleInterface")
 local World = require("world")
+local Resources = require("resources")
 
 local world = World:new()
+local resources = Resources:new(100, 50, 10)
 
 local gameState = {
 	StartMenu = true,
@@ -17,7 +19,7 @@ local interfaces = {
 function love.load()
 	love.graphics.setColor(1, 1, 1)
 	interfaces.MainMenu = MainMenuInterface:new(gameState)
-	interfaces.Battle = BattleInterface:new()
+	interfaces.Battle = BattleInterface:new(resources)
 end
 
 function love.update(dt)
@@ -70,7 +72,7 @@ function love.mousepressed(x, y, button, istouch, presses)
 		if button == 1 then
 			local uiClickHandled = interfaces.Battle:IsPressed({ X = x, Y = y }, 0)
 			if not uiClickHandled then
-				world:PlaceStructure(interfaces.Battle:GetSelectedStructureType(), x, y)
+				world:PlaceStructure(interfaces.Battle:GetSelectedStructureType(), resources, x, y)
 			end
 		end
 	end

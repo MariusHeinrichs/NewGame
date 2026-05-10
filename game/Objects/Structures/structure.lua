@@ -9,6 +9,7 @@ local DEFAULTS = {
 	Size = 10,
 	SpawnRate = 5,
 	SpawnTimer = 0,
+	Costs = { Gold = 0, Metal = 0, Aether = 0 },
 }
 
 ---@class Structure : Object
@@ -17,6 +18,7 @@ local DEFAULTS = {
 ---@field Size number
 ---@field SpawnRate number
 ---@field SpawnTimer number
+---@field Costs table
 local Structure = {}
 Structure.__index = Structure
 
@@ -28,14 +30,16 @@ setmetatable(Structure, { __index = Object })
 ---@param Armor number | nil
 ---@param Size number | nil
 ---@param SpawnRate number | nil
+---@param Costs table | nil
 ---@return Structure
-function Structure:new(Name, Health, Armor, Size, SpawnRate)
+function Structure:new(Name, Health, Armor, Size, SpawnRate, Costs)
 	local newStructure = Object.new(self, Name)
 	newStructure.Health = Health or DEFAULTS.Health
 	newStructure.Armor = Armor or DEFAULTS.Armor
 	newStructure.Size = Size or DEFAULTS.Size
 	newStructure.SpawnRate = SpawnRate or DEFAULTS.SpawnRate
 	newStructure.SpawnTimer = DEFAULTS.SpawnTimer
+	newStructure.Costs = Costs or DEFAULTS.Costs
 	return newStructure
 end
 

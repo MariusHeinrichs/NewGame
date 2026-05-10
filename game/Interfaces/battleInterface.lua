@@ -24,15 +24,18 @@ end
 --- @field ArcherButton Button
 --- @field MageButton Button
 --- @field SelectedStructureType string | nil
+---@field Resources Resources | nil
 local BattleInterface = {}
 BattleInterface.__index = BattleInterface
 
 --- Creates a new BattleInterface table.
+---@param resources table | nil
 ---@return BattleInterface
-function BattleInterface:new()
+function BattleInterface:new(resources)
 	local width, height = love.graphics.getDimensions()
 	local battleInterface = setmetatable({}, self)
 	battleInterface.SelectedStructureType = nil
+	battleInterface.Resources = resources
 
 	local buttonWidth, buttonHeight = 170, 50
 	local spacingX = 20
@@ -63,8 +66,14 @@ function BattleInterface:new()
 	return battleInterface
 end
 
---- Draws all battle buttons.
+--- Draws all battle buttons and the HUD.
 function BattleInterface:Draw()
+	if self.Resources then
+		local width = love.graphics.getDimensions()
+		local hudText = string.format("Gold: %d   Metal: %d   Aether: %d", self.Resources.Gold, self.Resources.Metal, self.Resources.Aether)
+		love.graphics.printf(hudText, 0, 10, width - 20, "right")
+	end
+
 	self.BarbarianButton:Draw()
 	self.KnightButton:Draw()
 	self.ArcherButton:Draw()
