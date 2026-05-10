@@ -18,4 +18,16 @@ function GameStateTransitions.EnterRunning(gameState, resetRuntimeState)
 	gameState.Mode = GameStateModes.RUNNING
 end
 
+--- Enters pause mode from running gameplay.
+---@param gameState {Mode: string}
+function GameStateTransitions.EnterPause(gameState)
+	gameState.Mode = GameStateModes.PAUSE
+end
+
+--- Enters the start screen from the main menu.
+--- @param gameState {Mode: string}
+function GameStateTransitions.EnterStart(gameState)
+	gameState.Mode = GameStateModes.START
+end
+
 return GameStateTransitions

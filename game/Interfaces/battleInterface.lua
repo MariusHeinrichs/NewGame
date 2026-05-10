@@ -6,6 +6,7 @@ local BASE_BUTTON_WIDTH = 170
 local BASE_BUTTON_HEIGHT = 50
 local BASE_SPACING_X = 20
 local BASE_BOTTOM_MARGIN = 24
+local PLACEMENT_HINT_DURATION = 2.0
 
 local function onBarbarianButtonPressed(interface)
 	interface.SelectedStructureType = "BarbarianCamp"
@@ -23,15 +24,38 @@ local function onMageButtonPressed(interface)
 	interface.SelectedStructureType = "MageTower"
 end
 
---- @class BattleInterface
---- @field BarbarianButton Button
---- @field KnightButton Button
---- @field ArcherButton Button
---- @field MageButton Button
---- @field SelectedStructureType string | nil
+---@class BattleInterface
+---@field BarbarianButton Button
+---@field KnightButton Button
+---@field ArcherButton Button
+---@field MageButton Button
+---@field SelectedStructureType string | nil
 ---@field Resources Resources | nil
+---@field PlacementHintText string | nil
+---@field PlacementHintTimeLeft number
 local BattleInterface = {}
 BattleInterface.__index = BattleInterface
+
+---@param reason string | nil
+---@return string
+local function getPlacementFailureMessage(reason)
+	if reason == "invalid_type" then
+		return "Bitte zuerst eine Struktur auswaehlen."
+	end
+	if reason == "invalid_class" then
+		return "Diese Struktur kann aktuell nicht platziert werden."
+	end
+	if reason == "invalid_resources" then
+		return "Ressourcen sind nicht initialisiert."
+	end
+	if reason == "blocked_by_collision" then
+		return "Platzierung blockiert: Zu nah an Einheiten oder Strukturen."
+	end
+	if reason == "not_affordable" then
+		return "Nicht genug Ressourcen fuer diese Struktur."
+	end
+	return "Struktur konnte nicht platziert werden."
+end
 
 --- Creates a new BattleInterface table.
 ---@param resources table | nil
@@ -40,12 +64,18 @@ function BattleInterface:new(resources)
 	local battleInterface = setmetatable({}, self)
 	battleInterface.SelectedStructureType = nil
 	battleInterface.Resources = resources
+	battleInterface.PlacementHintText = nil
+	battleInterface.PlacementHintTimeLeft = 0
 
 	local definitions = {
-		{ key = "BarbarianButton", name = "Barbarian",        text = "Barbarian",        action = function() onBarbarianButtonPressed(battleInterface) end },
-		{ key = "KnightButton",    name = "Knight",        text = "Knight",        action = function() onKnightButtonPressed(battleInterface) end },
-		{ key = "ArcherButton",    name = "Archer", text = "Archer", action = function() onArcherButtonPressed(battleInterface) end },
-		{ key = "MageButton",      name = "Mage",        text = "Mage",        action = function() onMageButtonPressed(battleInterface) end },
+		{ key = "BarbarianButton", name = "Barbarian", text = "Barbarian", action = function() onBarbarianButtonPressed(
+			battleInterface) end },
+		{ key = "KnightButton",    name = "Knight",    text = "Knight",    action = function() onKnightButtonPressed(
+			battleInterface) end },
+		{ key = "ArcherButton",    name = "Archer",    text = "Archer",    action = function() onArcherButtonPressed(
+			battleInterface) end },
+		{ key = "MageButton",      name = "Mage",      text = "Mage",      action = function() onMageButtonPressed(
+			battleInterface) end },
 	}
 
 	for index, definition in ipairs(definitions) do
@@ -63,6 +93,22 @@ function BattleInterface:new(resources)
 	battleInterface:RebuildLayout()
 
 	return battleInterface
+end
+
+---@param dt number
+function BattleInterface:Update(dt)
+	if self.PlacementHintTimeLeft > 0 then
+		self.PlacementHintTimeLeft = math.max(0, self.PlacementHintTimeLeft - dt)
+		if self.PlacementHintTimeLeft == 0 then
+			self.PlacementHintText = nil
+		end
+	end
+end
+
+---@param reason string | nil
+function BattleInterface:ShowPlacementFailure(reason)
+	self.PlacementHintText = getPlacementFailureMessage(reason)
+	self.PlacementHintTimeLeft = PLACEMENT_HINT_DURATION
 end
 
 --- Recomputes battle button positions based on current window size.
@@ -113,9 +159,17 @@ end
 
 --- Draws all battle buttons and the HUD.
 function BattleInterface:Draw()
+	if self.PlacementHintText and self.PlacementHintTimeLeft > 0 then
+		local width = love.graphics.getDimensions()
+		love.graphics.setColor(1, 0.3, 0.3, 1)
+		love.graphics.printf(self.PlacementHintText, 0, 36, width, "center")
+		love.graphics.setColor(1, 1, 1, 1)
+	end
+
 	if self.Resources then
 		local width = love.graphics.getDimensions()
-		local hudText = string.format("Gold: %d   Metal: %d   Aether: %d", self.Resources.Gold, self.Resources.Metal, self.Resources.Aether)
+		local hudText = string.format("Gold: %d   Metal: %d   Aether: %d", self.Resources.Gold, self.Resources.Metal,
+			self.Resources.Aether)
 		love.graphics.printf(hudText, 0, 10, width - 20, "right")
 	end
 

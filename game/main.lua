@@ -1,4 +1,5 @@
 local MainMenuInterface = require("Interfaces.mainMenuInterface")
+local PauseInterface = require("Interfaces.pauseInterface")
 local MatchSetup = require("Systems.matchSetup")
 local GameStateModes = require("src.gameStateModes")
 local GameStateTransitions = require("src.gameStateTransitions")
@@ -14,10 +15,11 @@ local runtime = {
 	HasInitializedMatch = false,
 }
 
----@type { Battle: BattleInterface | nil, MainMenu: MainMenuInterface | nil }
+---@type { Battle: BattleInterface | nil, MainMenu: MainMenuInterface | nil, Pause: any }
 local interfaces = {
 	Battle = nil,
 	MainMenu = nil,
+	Pause = nil,
 }
 
 local function resetRuntimeState()
@@ -31,6 +33,7 @@ end
 function love.load()
 	love.graphics.setColor(1, 1, 1)
 	interfaces.MainMenu = MainMenuInterface.new(MainMenuInterface, gameState, resetRuntimeState)
+	interfaces.Pause = PauseInterface.new(PauseInterface, gameState)
 end
 
 function love.update(dt)
@@ -39,12 +42,14 @@ function love.update(dt)
 			MatchSetup.InitializeDefault(runtime.World, runtime.Resources)
 			runtime.HasInitializedMatch = true
 		end
+		interfaces.Battle:Update(dt)
 		runtime.World:Update(dt)
 	end
 end
 
 function love.draw()
 	love.graphics.printf("FPS: " .. love.timer.getFPS(), 10, 10, 200, "left")
+
 	if gameState.Mode == GameStateModes.START then
 		local width, height = love.graphics.getDimensions()
 		local font = love.graphics.getFont()
@@ -58,14 +63,36 @@ function love.draw()
 	end
 
 	if gameState.Mode == GameStateModes.RUNNING then
-		interfaces.Battle:Draw()
 		runtime.World:Draw()
+		interfaces.Battle:Draw()
+	end
+
+	if gameState.Mode == GameStateModes.PAUSE then
+		runtime.World:Draw()
+		interfaces.Battle:Draw()
+		interfaces.Pause:Draw()
 	end
 end
 
 function love.keypressed(key)
-	if key == "escape" then
+	if key == "escape" and gameState.Mode == GameStateModes.RUNNING then
+		GameStateTransitions.EnterPause(gameState)
+		return
+	end
+
+	if key == "escape" and gameState.Mode == GameStateModes.PAUSE then
+		GameStateTransitions.EnterRunning(gameState)
+		return
+	end
+
+	if key == "escape" and gameState.Mode == GameStateModes.START then
 		love.event.quit()
+		return
+	end
+
+	if key == "escape" and gameState.Mode == GameStateModes.MENU then
+		GameStateTransitions.EnterStart(gameState)
+		return
 	end
 
 	if gameState.Mode == GameStateModes.START then
@@ -89,8 +116,18 @@ function love.mousepressed(x, y, button, istouch, presses)
 		if button == 1 then
 			local uiClickHandled = interfaces.Battle:IsPressed({ X = x, Y = y }, 0)
 			if not uiClickHandled then
-				runtime.World:PlaceStructure(interfaces.Battle:GetSelectedStructureType(), runtime.Resources, x, y)
+				local placed, reason = runtime.World:PlaceStructure(interfaces.Battle:GetSelectedStructureType(), runtime.Resources,
+					x, y)
+				if not placed then
+					interfaces.Battle:ShowPlacementFailure(reason)
+				end
 			end
+		end
+	end
+
+	if gameState.Mode == GameStateModes.PAUSE then
+		if button == 1 then
+			interfaces.Pause:IsPressed({ X = x, Y = y }, 0)
 		end
 	end
 end
@@ -101,5 +138,8 @@ function love.resize(w, h)
 	end
 	if interfaces.Battle then
 		interfaces.Battle:RebuildLayout()
+	end
+	if interfaces.Pause then
+		interfaces.Pause:RebuildLayout()
 	end
 end
