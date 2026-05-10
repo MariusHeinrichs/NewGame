@@ -1,6 +1,7 @@
 local MainMenuInterface = require("Interfaces.mainMenuInterface")
 local PauseInterface = require("Interfaces.pauseInterface")
 local StartInterface = require("Interfaces.startInterface")
+local CombatOverlayInterface = require("Interfaces.combatOverlayInterface")
 local MatchSetup = require("Systems.matchSetup")
 local GameStateModes = require("src.gameStateModes")
 local GameContext = require("src.gameContext")
@@ -9,7 +10,7 @@ local GameInputRouter = require("src.gameInputRouter")
 local gameState = GameContext.GameState
 ---@type { World: World | nil, Resources: Resources | nil, HasInitializedMatch: boolean }
 local runtime = GameContext.Runtime
----@type { Battle: BattleInterface | nil, MainMenu: MainMenuInterface | nil, Pause: PauseInterface | nil, Start: StartInterface | nil }
+---@type { Battle: BattleInterface | nil, CombatOverlay: CombatOverlayInterface | nil, MainMenu: MainMenuInterface | nil, Pause: PauseInterface | nil, Start: StartInterface | nil }
 local interfaces = GameContext.Interfaces
 
 function love.load()
@@ -17,6 +18,7 @@ function love.load()
 	interfaces.Start = StartInterface:new()
 	interfaces.MainMenu = MainMenuInterface:new()
 	interfaces.Pause = PauseInterface:new()
+	interfaces.CombatOverlay = CombatOverlayInterface:new()
 	GameInputRouter.InitializeHandlers()
 end
 
@@ -27,7 +29,7 @@ function love.update(dt)
 		end
 
 		if not runtime.HasInitializedMatch then
-			MatchSetup.InitializeDefault(runtime.World, runtime.Resources)
+			MatchSetup.InitializeDefault(runtime.World)
 			runtime.HasInitializedMatch = true
 		end
 		runtime.Resources:Update(dt)
@@ -52,6 +54,9 @@ function love.draw()
 	if gameState.Mode == GameStateModes.RUNNING then
 		if runtime.World and interfaces.Battle then
 			runtime.World:Draw()
+			if interfaces.CombatOverlay then
+				interfaces.CombatOverlay:Draw(runtime.World)
+			end
 			interfaces.Battle:Draw()
 		end
 	end
@@ -59,6 +64,9 @@ function love.draw()
 	if gameState.Mode == GameStateModes.PAUSE then
 		if runtime.World and interfaces.Battle then
 			runtime.World:Draw()
+			if interfaces.CombatOverlay then
+				interfaces.CombatOverlay:Draw(runtime.World)
+			end
 			interfaces.Battle:Draw()
 		end
 		interfaces.Pause:Draw()

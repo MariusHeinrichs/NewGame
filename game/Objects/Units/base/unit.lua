@@ -70,6 +70,7 @@ end
 
 ---@class Unit : Object
 ---@field Health number
+---@field MaxHealth number
 ---@field Damage number
 ---@field Armor number
 ---@field Speed number
@@ -101,6 +102,7 @@ setmetatable(Unit, { __index = Object })
 function Unit:new(Name, Health, Damage, Armor, Speed, Size, AttackRange, AggroRange, AttackSpeed, Team)
 	local newUnit = Object.new(self, Name)
 	newUnit.Health = Health or DEFAULTS.Health
+	newUnit.MaxHealth = newUnit.Health
 	newUnit.Damage = Damage or DEFAULTS.Damage
 	newUnit.Armor = Armor or DEFAULTS.Armor
 	newUnit.Speed = Speed or DEFAULTS.Speed

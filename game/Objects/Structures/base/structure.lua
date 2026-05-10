@@ -12,6 +12,7 @@ local DEFAULTS = {
 
 ---@class Structure : Object
 ---@field Health number
+---@field MaxHealth number
 ---@field Armor number
 ---@field Size number
 ---@field Costs table
@@ -39,6 +40,7 @@ setmetatable(Structure, { __index = Object })
 function Structure:new(Name, Health, Armor, Size, Costs, IncomeBonusGold, IncomeBonusMetal, Team)
 	local newStructure = Object.new(self, Name)
 	newStructure.Health = Health or DEFAULTS.Health
+	newStructure.MaxHealth = newStructure.Health
 	newStructure.Armor = Armor or DEFAULTS.Armor
 	newStructure.Size = Size or DEFAULTS.Size
 	newStructure.Costs = Costs or DEFAULTS.Costs
