@@ -1,13 +1,9 @@
-local Unit = require("Objects.Units.unit")
 local Structure = require("Objects.Structures.structure")
 local MainMenuInterface = require("Interfaces.mainMenuInterface")
 local BattleInterface = require("Interfaces.battleInterface")
+local World = require("world")
 
-local units = {
-}
-
-local structures = {
-}
+local world = World:new()
 
 local gameState = {
 	StartMenu = true,
@@ -20,31 +16,13 @@ local interfaces = {
 
 function love.load()
 	love.graphics.setColor(1, 1, 1)
-
-	table.insert(units, Unit:new("Unit1", 100, 10, 5, 20, 10))
-	table.insert(units, Unit:new("Unit2", 150, 15, 10, 1, 40))
-	table.insert(structures, Structure:new("Structure1", 200, 20, 30, 2))
-	table.insert(structures, Structure:new("Structure2", 300, 30, 50, 5))
 	interfaces.MainMenu = MainMenuInterface:new(gameState)
-	interfaces.Battle = BattleInterface:new(gameState)
+	interfaces.Battle = BattleInterface:new()
 end
 
 function love.update(dt)
 	if gameState.Running then
-		for i = #units, 1, -1 do
-			local unit = units[i]
-			unit:Move("right")
-			if unit.Health <= 0 then
-				table.remove(units, i)
-			end
-		end
-
-		for _, structure in ipairs(structures) do
-			local spawnedUnit = structure:SpawnUnit(dt)
-			if spawnedUnit then
-				table.insert(units, spawnedUnit)
-			end
-		end
+		world:Update(dt)
 	end
 end
 
@@ -64,13 +42,7 @@ function love.draw()
 
 	if gameState.Running then
 		interfaces.Battle:Draw()
-		for _, unit in ipairs(units) do
-			unit:Draw()
-		end
-		for _, structure in ipairs(structures) do
-			structure:Place({ X = 100, Y = 100 + _* 80 })
-			structure:Draw()
-		end
+		world:Draw()
 	end
 end
 
@@ -91,6 +63,15 @@ function love.mousepressed(x, y, button, istouch, presses)
 	if gameState.MainMenu then
 		if button == 1 then
 			interfaces.MainMenu:IsPressed({ X = x, Y = y }, 0)
+		end
+	end
+
+	if gameState.Running then
+		if button == 1 then
+			local uiClickHandled = interfaces.Battle:IsPressed({ X = x, Y = y }, 0)
+			if not uiClickHandled then
+				world:PlaceStructure(interfaces.Battle:GetSelectedStructureType(), x, y)
+			end
 		end
 	end
 end

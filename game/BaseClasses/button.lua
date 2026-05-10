@@ -57,11 +57,14 @@ end
 --- If the button is pressed, its associated action will be executed.
 ---@param PositionMouse {X: number, Y: number}
 ---@param CursorRadius number
+---@return boolean True if the button is pressed, otherwise false.
 function Button:IsPressed(PositionMouse, CursorRadius)
 	if PositionMouse.X + CursorRadius >= self.PositionButton.X and PositionMouse.X - CursorRadius <= self.PositionButton.X + self.Width and
 		PositionMouse.Y + CursorRadius >= self.PositionButton.Y and PositionMouse.Y - CursorRadius <= self.PositionButton.Y + self.Height then
 		self.Action()
+		return true
 	end
+	return false
 end
 
 return Button

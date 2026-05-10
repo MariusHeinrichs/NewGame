@@ -2,7 +2,7 @@
 
 local Button = require("BaseClasses.button")
 
-local function onStartPressed(gameState)
+local function onStartButtonPressed(gameState)
 	gameState.MainMenu = false
 	gameState.Running = true
 end
@@ -27,7 +27,7 @@ function MainMenuInterface:new(gameState)
 	local centerX = width / 2 - buttonWidth / 2
 
 	local definitions = {
-		{ key = "StartButton",    name = "Start",    text = "Start Game", action = function() onStartPressed(gameState) end },
+		{ key = "StartButton",    name = "Start",    text = "Start Game", action = function() onStartButtonPressed(gameState) end },
 		{ key = "SettingsButton", name = "Settings", text = "Settings" },
 		{ key = "QuitButton",     name = "Quit",     text = "Quit Game",  action = function() love.event.quit() end },
 	}

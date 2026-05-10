@@ -2,44 +2,37 @@
 
 local Button = require("BaseClasses.button")
 
-local function onAttackPressed(gameState)
-	if gameState then
-		gameState.LastBattleAction = "Attack"
-	end
+local function onBarbarianButtonPressed(interface)
+	interface.SelectedStructureType = "Barbarian"
 end
 
-local function onDefendPressed(gameState)
-	if gameState then
-		gameState.LastBattleAction = "Defend"
-	end
+local function onKnightButtonPressed(interface)
+	interface.SelectedStructureType = "Knight"
 end
 
-local function onSpecialPressed(gameState)
-	if gameState then
-		gameState.LastBattleAction = "Special"
-	end
+local function onArcherButtonPressed(interface)
+	interface.SelectedStructureType = "Archer"
 end
 
-local function onRetreatPressed(gameState)
-	if gameState then
-		gameState.LastBattleAction = "Retreat"
-	end
+local function onMageButtonPressed(interface)
+	interface.SelectedStructureType = "Mage"
 end
 
 --- @class BattleInterface
---- @field AttackButton Button
---- @field DefendButton Button
---- @field SpecialButton Button
---- @field RetreatButton Button
+--- @field BarbarianButton Button
+--- @field KnightButton Button
+--- @field ArcherButton Button
+--- @field MageButton Button
+--- @field SelectedStructureType string | nil
 local BattleInterface = {}
 BattleInterface.__index = BattleInterface
 
 --- Creates a new BattleInterface table.
----@param gameState table | nil
 ---@return BattleInterface
-function BattleInterface:new(gameState)
+function BattleInterface:new()
 	local width, height = love.graphics.getDimensions()
-	local newButtons = setmetatable({}, self)
+	local battleInterface = setmetatable({}, self)
+	battleInterface.SelectedStructureType = nil
 
 	local buttonWidth, buttonHeight = 170, 50
 	local spacingX = 20
@@ -49,14 +42,14 @@ function BattleInterface:new(gameState)
 	local y = height - buttonHeight - 24
 
 	local definitions = {
-		{ key = "AttackButton",  name = "Attack",  text = "Attack",  action = function() onAttackPressed(gameState) end },
-		{ key = "DefendButton",  name = "Defend",  text = "Defend",  action = function() onDefendPressed(gameState) end },
-		{ key = "SpecialButton", name = "Special", text = "Special", action = function() onSpecialPressed(gameState) end },
-		{ key = "RetreatButton", name = "Retreat", text = "Retreat", action = function() onRetreatPressed(gameState) end },
+		{ key = "BarbarianButton", name = "Barbarian",        text = "Barbarian",        action = function() onBarbarianButtonPressed(battleInterface) end },
+		{ key = "KnightButton",    name = "Knight",        text = "Knight",        action = function() onKnightButtonPressed(battleInterface) end },
+		{ key = "ArcherButton",    name = "Archer", text = "Archer", action = function() onArcherButtonPressed(battleInterface) end },
+		{ key = "MageButton",      name = "Mage",        text = "Mage",        action = function() onMageButtonPressed(battleInterface) end },
 	}
 
 	for index, definition in ipairs(definitions) do
-		newButtons[definition.key] = Button:new(
+		battleInterface[definition.key] = Button:new(
 			definition.name,
 			definition.action,
 			buttonWidth,
@@ -67,25 +60,39 @@ function BattleInterface:new(gameState)
 		)
 	end
 
-	return newButtons
+	return battleInterface
 end
 
 --- Draws all battle buttons.
 function BattleInterface:Draw()
-	self.AttackButton:Draw()
-	self.DefendButton:Draw()
-	self.SpecialButton:Draw()
-	self.RetreatButton:Draw()
+	self.BarbarianButton:Draw()
+	self.KnightButton:Draw()
+	self.ArcherButton:Draw()
+	self.MageButton:Draw()
 end
 
 --- Checks if any battle button is pressed.
 ---@param PositionMouse {X: number, Y: number}
 ---@param CursorRadius number
 function BattleInterface:IsPressed(PositionMouse, CursorRadius)
-	self.AttackButton:IsPressed(PositionMouse, CursorRadius)
-	self.DefendButton:IsPressed(PositionMouse, CursorRadius)
-	self.SpecialButton:IsPressed(PositionMouse, CursorRadius)
-	self.RetreatButton:IsPressed(PositionMouse, CursorRadius)
+	if self.BarbarianButton:IsPressed(PositionMouse, CursorRadius) then
+		return true
+	end
+	if self.KnightButton:IsPressed(PositionMouse, CursorRadius) then
+		return true
+	end
+	if self.ArcherButton:IsPressed(PositionMouse, CursorRadius) then
+		return true
+	end
+	if self.MageButton:IsPressed(PositionMouse, CursorRadius) then
+		return true
+	end
+	return false
+end
+
+---@return string | nil
+function BattleInterface:GetSelectedStructureType()
+	return self.SelectedStructureType
 end
 
 return BattleInterface
