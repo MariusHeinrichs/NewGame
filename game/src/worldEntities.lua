@@ -130,6 +130,9 @@ function WorldEntities:TrySpawnUnitFromStructure(structure, dt)
 	if not structure or type(structure.SpawnUnit) ~= "function" then
 		return false
 	end
+	if (structure.Health or 0) <= 0 then
+		return false
+	end
 
 	local structureTeam = structure.Team or "player"
 	if not self:CanTeamSpawnUnit(structureTeam) then
@@ -168,6 +171,9 @@ function WorldEntities:ApplyProjectileSplash(splashImpact)
 		if (dx * dx + dy * dy) <= splashRadiusSq then
 			local dmg = math.max(1, splashImpact.Damage - (target.Armor or 0))
 			target.Health = target.Health - dmg
+			if type(target.OnDamaged) == "function" then
+				target:OnDamaged(splashImpact.Source)
+			end
 		end
 	end
 

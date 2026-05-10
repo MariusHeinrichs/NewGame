@@ -80,6 +80,7 @@ end
 ---@field AttackSpeed number
 ---@field Team "player" | "enemy"
 ---@field CurrentTarget Unit | Structure | nil
+---@field RetaliationTarget Unit | Structure | nil
 local Unit = {}
 Unit.__index = Unit
 
@@ -112,10 +113,39 @@ function Unit:new(Name, Health, Damage, Armor, Speed, Size, AttackRange, AggroRa
 	newUnit.AttackSpeed = AttackSpeed or DEFAULTS.AttackSpeed
 	newUnit.Team = Team or "player"
 	newUnit.CurrentTarget = nil
+	newUnit.RetaliationTarget = nil
 	newUnit.AvoidancePreferredY = 0
 	newUnit.AvoidanceStickTicks = 0
 	newUnit.AvoidanceLastVerticalY = 0 -- Initial tie-break falls back to random up/down.
 	return newUnit
+end
+
+---@param target Unit | Structure | nil
+---@return boolean
+function Unit:CanKeepRetaliationTarget(target)
+	if not target then
+		return false
+	end
+	if not self:IsTargetAlive(target) or not self:IsTargetEnemy(target) then
+		return false
+	end
+	return true
+end
+
+--- Locks retaliation to the first valid attacker until that target is no longer valid.
+---@param attacker Unit | Structure | nil
+function Unit:OnDamaged(attacker)
+	if not attacker then
+		return
+	end
+	if not self:IsTargetEnemy(attacker) then
+		return
+	end
+	if self:CanKeepRetaliationTarget(self.RetaliationTarget) then
+		return
+	end
+	self.RetaliationTarget = attacker
+	self.CurrentTarget = attacker
 end
 
 ---@param target Unit | Structure | nil
@@ -242,6 +272,12 @@ end
 ---@param entities WorldEntities
 ---@return Unit | Structure | nil
 function Unit:RefreshTarget(entities)
+	if self:CanKeepRetaliationTarget(self.RetaliationTarget) then
+		self.CurrentTarget = self.RetaliationTarget
+		return self.CurrentTarget
+	end
+	self.RetaliationTarget = nil
+
 	if self:CanKeepCurrentTarget(self.CurrentTarget) then
 		return self.CurrentTarget
 	end
@@ -434,6 +470,9 @@ function Unit:UpdateCombat(dt, entities)
 
 	local target = self:RefreshTarget(entities)
 	if target and not self:IsTargetInRange(target) then
+		if self:CanKeepRetaliationTarget(self.RetaliationTarget) then
+			return
+		end
 		target = self:SearchForEnemyToAttack(entities)
 		if target then
 			self.CurrentTarget = target

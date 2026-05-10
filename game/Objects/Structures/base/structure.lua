@@ -20,6 +20,8 @@ local DEFAULTS = {
 ---@field IncomeBonusMetal number
 ---@field IsStructure boolean
 ---@field Team "player" | "enemy"
+---@field CurrentTarget Unit | Structure | nil
+---@field RetaliationTarget Unit | Structure | nil
 local Structure = {}
 Structure.__index = Structure
 
@@ -48,6 +50,8 @@ function Structure:new(Name, Health, Armor, Size, Costs, IncomeBonusGold, Income
 	newStructure.IncomeBonusMetal = IncomeBonusMetal or DEFAULTS.IncomeBonusMetal
 	newStructure.IsStructure = true
 	newStructure.Team = Team or "player"
+	newStructure.CurrentTarget = nil
+	newStructure.RetaliationTarget = nil
 	return newStructure
 end
 
@@ -120,6 +124,34 @@ function Structure:CanKeepCurrentTarget(target)
 		return false
 	end
 	return self:IsTargetInAggroRange(target)
+end
+
+---@param target Unit | Structure | nil
+---@return boolean
+function Structure:CanKeepRetaliationTarget(target)
+	if not target then
+		return false
+	end
+	if not self:IsTargetAlive(target) or not self:IsTargetEnemy(target) then
+		return false
+	end
+	return self:IsTargetInRange(target)
+end
+
+--- Locks retaliation to the first valid attacker until that target becomes invalid.
+---@param attacker Unit | Structure | nil
+function Structure:OnDamaged(attacker)
+	if not attacker then
+		return
+	end
+	if not self:IsTargetEnemy(attacker) then
+		return
+	end
+	if self:CanKeepRetaliationTarget(self.RetaliationTarget) then
+		return
+	end
+	self.RetaliationTarget = attacker
+	self.CurrentTarget = attacker
 end
 
 ---@param entities WorldEntities

@@ -9,6 +9,51 @@ local WorldEntities = require("src.worldEntities")
 local World = {}
 World.__index = World
 
+---@param entities WorldEntities
+---@param units table
+local function runMovementPhase(entities, units)
+	entities:RebuildSpatialIndex()
+
+	for _, unit in ipairs(units) do
+		local nextX, nextY = unit:CalculateNextPosition(entities)
+		unit:MoveTo(nextX, nextY)
+	end
+
+	entities:RemoveDeadUnits()
+	entities:RebuildSpatialIndex()
+end
+
+---@param entities WorldEntities
+---@param units table
+---@param structures table
+---@param dt number
+local function runCombatPhase(entities, units, structures, dt)
+	for _, unit in ipairs(units) do
+		unit:UpdateCombat(dt, entities)
+	end
+	for _, structure in ipairs(structures) do
+		structure:UpdateCombat(dt, entities)
+	end
+end
+
+---@param entities WorldEntities
+---@param dt number
+local function runProjectileAndCleanupPhase(entities, dt)
+	entities:UpdateProjectiles(dt)
+	entities:RemoveDeadUnits()
+end
+
+---@param entities WorldEntities
+---@param structures table
+---@param dt number
+local function runSpawnPhase(entities, structures, dt)
+	for _, structure in ipairs(structures) do
+		entities:TrySpawnUnitFromStructure(structure, dt)
+	end
+
+	entities:RemoveDeadStructures()
+end
+
 ---@return World
 function World:new()
 	return setmetatable({ Entities = WorldEntities:new() }, self)
@@ -38,30 +83,17 @@ function World:Update(dt)
 	local units = self.Entities:GetUnits()
 	local structures = self.Entities:GetStructures()
 
-	self.Entities:RebuildSpatialIndex()
+	-- Phase 1: movement and pathing.
+	runMovementPhase(self.Entities, units)
 
-	for _, unit in ipairs(units) do
-		local nextX, nextY = unit:CalculateNextPosition(self.Entities)
-		unit:MoveTo(nextX, nextY)
-	end
+	-- Phase 2: direct combat resolution.
+	runCombatPhase(self.Entities, units, structures, dt)
 
-	self.Entities:RemoveDeadUnits()
-	self.Entities:RebuildSpatialIndex()
+	-- Phase 3: projectile simulation and post-combat cleanup.
+	runProjectileAndCleanupPhase(self.Entities, dt)
 
-	for _, unit in ipairs(units) do
-		unit:UpdateCombat(dt, self.Entities)
-	end
-	for _, structure in ipairs(structures) do
-		structure:UpdateCombat(dt, self.Entities)
-	end
-	self.Entities:UpdateProjectiles(dt)
-	self.Entities:RemoveDeadUnits()
-
-	for _, structure in ipairs(structures) do
-		self.Entities:TrySpawnUnitFromStructure(structure, dt)
-	end
-
-	self.Entities:RemoveDeadStructures()
+	-- Phase 4: structure-based spawns and structure cleanup.
+	runSpawnPhase(self.Entities, structures, dt)
 end
 
 --- Draws all entities.

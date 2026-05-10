@@ -72,6 +72,7 @@ function RangeStructure:PerformAttack(target, entities)
 		self.Position.X,
 		self.Position.Y,
 		target,
+		self,
 		self.ProjectileSpeed or DEFAULTS.ProjectileSpeed,
 		self.ProjectileRadius or math.max(2, self.Size * 0.2),
 		self.Damage,
@@ -96,7 +97,11 @@ function RangeStructure:UpdateCombat(dt, entities)
 	end
 
 	local target = self.CurrentTarget
-	if not target or not self:IsTargetAlive(target) or not self:IsTargetEnemy(target) or not self:IsTargetInRange(target) then
+	if self:CanKeepRetaliationTarget(self.RetaliationTarget) then
+		target = self.RetaliationTarget
+		self.CurrentTarget = target
+	elseif not target or not self:IsTargetAlive(target) or not self:IsTargetEnemy(target) or not self:IsTargetInRange(target) then
+		self.RetaliationTarget = nil
 		target = self:SearchForEnemyToAttack(entities)
 		self.CurrentTarget = target
 	end

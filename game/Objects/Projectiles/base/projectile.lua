@@ -11,6 +11,7 @@
 ---@field Style string
 ---@field Team "player" | "enemy"
 ---@field Target Unit | Structure | nil
+---@field Source Unit | Structure | nil
 ---@field Active boolean
 local Projectile = {}
 Projectile.__index = Projectile
@@ -30,6 +31,7 @@ end
 ---@param x number
 ---@param y number
 ---@param target Unit | Structure
+---@param source Unit | Structure | nil
 ---@param speed number
 ---@param radius number
 ---@param damage number
@@ -38,7 +40,7 @@ end
 ---@param style string | nil
 ---@param team "player" | "enemy"
 ---@return Projectile
-function Projectile:new(x, y, target, speed, radius, damage, splashRadius, splashDamageMultiplier, style, team)
+function Projectile:new(x, y, target, source, speed, radius, damage, splashRadius, splashDamageMultiplier, style, team)
 	return setmetatable({
 		Position = { X = x, Y = y },
 		Velocity = { X = 0, Y = 0 },
@@ -50,6 +52,7 @@ function Projectile:new(x, y, target, speed, radius, damage, splashRadius, splas
 		Style = style or "orb",
 		Team = team,
 		Target = target,
+		Source = source,
 		Active = true,
 	}, self)
 end
@@ -69,6 +72,9 @@ end
 function Projectile:ApplyHit(target)
 	local dmg = math.max(1, self.Damage - (target.Armor or 0))
 	target.Health = target.Health - dmg
+	if type(target.OnDamaged) == "function" then
+		target:OnDamaged(self.Source)
+	end
 	self.Active = false
 end
 
@@ -87,6 +93,7 @@ function Projectile:BuildSplashImpact(impactX, impactY, directTarget)
 		Radius = self.SplashRadius,
 		Damage = math.max(1, math.floor(self.Damage * self.SplashDamageMultiplier)),
 		Team = self.Team,
+		Source = self.Source,
 		DirectTarget = directTarget,
 	}
 end

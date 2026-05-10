@@ -28,6 +28,7 @@ function RangedUnit:PerformAttack(target, entities)
 		self.Position.X,
 		self.Position.Y,
 		target,
+		self,
 		projectileSpeed,
 		projectileRadius,
 		self.Damage,

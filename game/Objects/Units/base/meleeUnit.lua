@@ -15,6 +15,9 @@ function MeleeUnit:PerformAttack(target, entities)
 	local _ = entities
 	local dmg = math.max(1, self.Damage - (target.Armor or 0))
 	target.Health = target.Health - dmg
+	if type(target.OnDamaged) == "function" then
+		target:OnDamaged(self)
+	end
 end
 
 return MeleeUnit

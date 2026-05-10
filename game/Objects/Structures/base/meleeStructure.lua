@@ -45,6 +45,9 @@ end
 function MeleeStructure:PerformAttack(target)
 	local dmg = math.max(1, self.Damage - (target.Armor or 0))
 	target.Health = target.Health - dmg
+	if type(target.OnDamaged) == "function" then
+		target:OnDamaged(self)
+	end
 end
 
 ---@param dt number
@@ -60,7 +63,11 @@ function MeleeStructure:UpdateCombat(dt, entities)
 	end
 
 	local target = self.CurrentTarget
-	if not target or not self:IsTargetAlive(target) or not self:IsTargetEnemy(target) or not self:IsTargetInRange(target) then
+	if self:CanKeepRetaliationTarget(self.RetaliationTarget) then
+		target = self.RetaliationTarget
+		self.CurrentTarget = target
+	elseif not target or not self:IsTargetAlive(target) or not self:IsTargetEnemy(target) or not self:IsTargetInRange(target) then
+		self.RetaliationTarget = nil
 		target = self:SearchForEnemyToAttack(entities)
 		self.CurrentTarget = target
 	end
