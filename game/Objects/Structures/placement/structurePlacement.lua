@@ -19,17 +19,6 @@ local function isValidStructureClass(structureClass)
 	return true
 end
 
---- Checks whether a structure can be placed without overlapping existing entities.
----@param entities WorldEntities
----@param x number
----@param y number
----@param size number
----@return boolean
----@return string | nil
-local function canPlaceStructureAt(entities, x, y, size)
-	return entities:CanPlaceStructureAt(x, y, size)
-end
-
 --- Checks whether the structure center/footprint is on the allowed team half.
 ---@param x number
 ---@param size number
@@ -76,7 +65,7 @@ function StructurePlacement.PlaceStructure(structureClass, resources, entities, 
 		return nil, "wrong_side"
 	end
 
-	local canPlace, placementReason = canPlaceStructureAt(entities, x, y, structureClass.Size)
+	local canPlace, placementReason = entities:CanPlaceStructureAt(x, y, structureClass.Size)
 	if not canPlace then
 		return nil, placementReason
 	end

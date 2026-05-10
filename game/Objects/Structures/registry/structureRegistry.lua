@@ -3,12 +3,17 @@
 local StructureRegistry = {}
 
 local STRUCTURE_CLASS_BY_TYPE = {
-	TownHall      = require("Objects.Structures.types.townhall"),
-	Barracks      = require("Objects.Structures.types.barracks"),
-	BarbarianCamp = require("Objects.Structures.types.barbariancamp"),
-	ArcherTower   = require("Objects.Structures.types.archertower"),
-	MageTower     = require("Objects.Structures.types.magetower"),
+	TownHall      = require("Objects.Structures.DefenseStructures.townhall"),
+	Barracks      = require("Objects.Structures.SpawnStructures.barracks"),
+	BarbarianCamp = require("Objects.Structures.SpawnStructures.barbariancamp"),
+	ArcherCamp    = require("Objects.Structures.SpawnStructures.archercamp"),
+	Library       = require("Objects.Structures.SpawnStructures.library"),
 }
+
+-- Backward compatibility for old ids.
+STRUCTURE_CLASS_BY_TYPE.ArcherTower = STRUCTURE_CLASS_BY_TYPE.ArcherCamp
+STRUCTURE_CLASS_BY_TYPE.MageTower = STRUCTURE_CLASS_BY_TYPE.Library
+
 
 --- Returns the structure class for the given type id.
 ---@param structureType string | nil

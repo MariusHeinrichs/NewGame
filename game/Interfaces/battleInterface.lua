@@ -18,11 +18,11 @@ local function onKnightButtonPressed(interface)
 end
 
 local function onArcherButtonPressed(interface)
-	interface.SelectedStructureType = "ArcherTower"
+	interface.SelectedStructureType = "ArcherCamp"
 end
 
 local function onMageButtonPressed(interface)
-	interface.SelectedStructureType = "MageTower"
+	interface.SelectedStructureType = "Library"
 end
 
 ---@class BattleInterface

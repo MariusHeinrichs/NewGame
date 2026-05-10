@@ -51,6 +51,9 @@ function World:Update(dt)
 	for _, unit in ipairs(units) do
 		unit:UpdateCombat(dt, self.Entities)
 	end
+	for _, structure in ipairs(structures) do
+		structure:UpdateCombat(dt, self.Entities)
+	end
 	self.Entities:UpdateProjectiles(dt)
 	self.Entities:RemoveDeadUnits()
 

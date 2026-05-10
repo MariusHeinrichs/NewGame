@@ -169,7 +169,7 @@ end
 ---@param target Unit | Structure
 ---@return number
 function Unit:GetTargetRadius(target)
-	if target.SpawnRate ~= nil then
+	if target.IsStructure == true then
 		return (target.Size or 0) / 2
 	end
 	return target.Size or 0

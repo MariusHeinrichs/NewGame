@@ -21,7 +21,7 @@ local function getTargetRadius(target)
 	if target == nil then
 		return 0
 	end
-	if target.SpawnRate ~= nil then
+	if target.IsStructure == true then
 		return (target.Size or 0) / 2
 	end
 	return target.Size or 0
@@ -72,59 +72,36 @@ function Projectile:ApplyHit(target)
 	self.Active = false
 end
 
----@param entities WorldEntities | nil
 ---@param impactX number
 ---@param impactY number
 ---@param directTarget Unit | Structure | nil
-function Projectile:ApplySplash(entities, impactX, impactY, directTarget)
+---@return table | nil
+function Projectile:BuildSplashImpact(impactX, impactY, directTarget)
 	if self.SplashRadius <= 0 or self.SplashDamageMultiplier <= 0 then
-		return
-	end
-	if entities == nil then
-		return
+		return nil
 	end
 
-	local splashDamage = math.max(1, math.floor(self.Damage * self.SplashDamageMultiplier))
-	local splashRadiusSq = self.SplashRadius * self.SplashRadius
-
-	local function applySplashToTarget(target)
-		if target == nil or target == directTarget then
-			return
-		end
-		if target.Team == self.Team then
-			return
-		end
-		if (target.Health or 0) <= 0 then
-			return
-		end
-
-		local dx = target.Position.X - impactX
-		local dy = target.Position.Y - impactY
-		if (dx * dx + dy * dy) <= splashRadiusSq then
-			local dmg = math.max(1, splashDamage - (target.Armor or 0))
-			target.Health = target.Health - dmg
-		end
-	end
-
-	for _, unit in ipairs(entities:GetUnits()) do
-		applySplashToTarget(unit)
-	end
-	for _, structure in ipairs(entities:GetStructures()) do
-		applySplashToTarget(structure)
-	end
+	return {
+		X = impactX,
+		Y = impactY,
+		Radius = self.SplashRadius,
+		Damage = math.max(1, math.floor(self.Damage * self.SplashDamageMultiplier)),
+		Team = self.Team,
+		DirectTarget = directTarget,
+	}
 end
 
 ---@param dt number
----@param entities WorldEntities | nil
-function Projectile:Update(dt, entities)
+---@return table | nil
+function Projectile:Update(dt)
 	local target = self.Target
 	if target == nil then
 		self.Active = false
-		return
+		return nil
 	end
 	if not isTargetAlive(target) then
 		self.Active = false
-		return
+		return nil
 	end
 	---@type Unit | Structure
 	local liveTarget = target
@@ -134,11 +111,12 @@ function Projectile:Update(dt, entities)
 	local distSq = tx * tx + ty * ty
 	local hitRadius = self.Radius + getTargetRadius(liveTarget)
 	if distSq <= (hitRadius * hitRadius) then
+		self.Position.X = liveTarget.Position.X
+		self.Position.Y = liveTarget.Position.Y
 		local impactX = self.Position.X
 		local impactY = self.Position.Y
 		self:ApplyHit(liveTarget)
-		self:ApplySplash(entities, impactX, impactY, liveTarget)
-		return
+		return self:BuildSplashImpact(impactX, impactY, liveTarget)
 	end
 
 	local dist = math.sqrt(distSq)
@@ -146,8 +124,7 @@ function Projectile:Update(dt, entities)
 		local impactX = self.Position.X
 		local impactY = self.Position.Y
 		self:ApplyHit(liveTarget)
-		self:ApplySplash(entities, impactX, impactY, liveTarget)
-		return
+		return self:BuildSplashImpact(impactX, impactY, liveTarget)
 	end
 
 	self.Velocity.X = (tx / dist) * self.Speed
@@ -160,12 +137,12 @@ function Projectile:Update(dt, entities)
 		local impactX = self.Position.X
 		local impactY = self.Position.Y
 		self:ApplyHit(liveTarget)
-		self:ApplySplash(entities, impactX, impactY, liveTarget)
-		return
+		return self:BuildSplashImpact(impactX, impactY, liveTarget)
 	end
 
 	self.Position.X = self.Position.X + (tx / dist) * step
 	self.Position.Y = self.Position.Y + (ty / dist) * step
+	return nil
 end
 
 function Projectile:Draw()

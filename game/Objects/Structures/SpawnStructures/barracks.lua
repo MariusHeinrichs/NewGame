@@ -1,11 +1,11 @@
 --- Barracks structure — spawns Knights.
 
-local Structure = require("Objects.Structures.base.structure")
+local SpawningStructure = require("Objects.Structures.base.spawningStructure")
 local UnitRegistry = require("Objects.Units.registry.unitRegistry")
 
 local Knight = UnitRegistry.GetByType("Knight")
 
----@class Barracks : Structure
+---@class Barracks : SpawningStructure
 local Barracks = {}
 Barracks.__index = Barracks
 
@@ -14,21 +14,22 @@ Barracks.Costs = { Gold = 50, Metal = 40, Aether = 0 }
 Barracks.IncomeBonusGold = 2
 Barracks.IncomeBonusMetal = 2
 
-setmetatable(Barracks, { __index = Structure })
+setmetatable(Barracks, { __index = SpawningStructure })
 
 ---Creates a new Barracks.
 ---@return Barracks
 function Barracks:new()
-	local instance = Structure.new(self, "Barracks",
+	local instance = SpawningStructure.new(self, "Barracks",
 		280,            -- Health
 		18,             -- Armor
 		Barracks.Size,  -- Size
 		3,              -- SpawnRate
-		Barracks.Costs
+		Knight,
+		Barracks.Costs,
+		Barracks.IncomeBonusGold,
+		Barracks.IncomeBonusMetal,
+		0
 	)
-	instance.IncomeBonusGold = Barracks.IncomeBonusGold
-	instance.IncomeBonusMetal = Barracks.IncomeBonusMetal
-	instance.UnitClass = Knight
 	return instance
 end
 

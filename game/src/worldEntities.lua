@@ -101,11 +101,47 @@ function WorldEntities:GetProjectiles()
 	return self.Projectiles
 end
 
+---@param splashImpact table | nil
+function WorldEntities:ApplyProjectileSplash(splashImpact)
+	if splashImpact == nil then
+		return
+	end
+
+	local splashRadiusSq = splashImpact.Radius * splashImpact.Radius
+
+	local function applySplashToTarget(target)
+		if target == nil or target == splashImpact.DirectTarget then
+			return
+		end
+		if target.Team == splashImpact.Team then
+			return
+		end
+		if (target.Health or 0) <= 0 then
+			return
+		end
+
+		local dx = target.Position.X - splashImpact.X
+		local dy = target.Position.Y - splashImpact.Y
+		if (dx * dx + dy * dy) <= splashRadiusSq then
+			local dmg = math.max(1, splashImpact.Damage - (target.Armor or 0))
+			target.Health = target.Health - dmg
+		end
+	end
+
+	for _, unit in ipairs(self.Units) do
+		applySplashToTarget(unit)
+	end
+	for _, structure in ipairs(self.Structures) do
+		applySplashToTarget(structure)
+	end
+end
+
 ---@param dt number
 function WorldEntities:UpdateProjectiles(dt)
 	for i = #self.Projectiles, 1, -1 do
 		local projectile = self.Projectiles[i]
-		projectile:Update(dt)
+		local splashImpact = projectile:Update(dt)
+		self:ApplyProjectileSplash(splashImpact)
 		if not projectile:IsActive() then
 			table.remove(self.Projectiles, i)
 		end
