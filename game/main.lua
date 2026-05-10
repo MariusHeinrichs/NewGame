@@ -30,6 +30,7 @@ function love.update(dt)
 			MatchSetup.InitializeDefault(runtime.World, runtime.Resources)
 			runtime.HasInitializedMatch = true
 		end
+		runtime.Resources:Update(dt)
 		interfaces.Battle:Update(dt)
 		runtime.World:Update(dt)
 	end

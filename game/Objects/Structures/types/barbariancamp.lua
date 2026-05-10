@@ -11,6 +11,8 @@ BarbarianCamp.__index = BarbarianCamp
 
 BarbarianCamp.Size  = 28
 BarbarianCamp.Costs = { Gold = 30, Metal = 20, Aether = 0 }
+BarbarianCamp.IncomeBonusGold = 2
+BarbarianCamp.IncomeBonusMetal = 1
 
 setmetatable(BarbarianCamp, { __index = Structure })
 
@@ -24,6 +26,8 @@ function BarbarianCamp:new()
 		2,                   -- SpawnRate
 		BarbarianCamp.Costs
 	)
+	instance.IncomeBonusGold = BarbarianCamp.IncomeBonusGold
+	instance.IncomeBonusMetal = BarbarianCamp.IncomeBonusMetal
 	instance.UnitClass = Barbarian
 	return instance
 end

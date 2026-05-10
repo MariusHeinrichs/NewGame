@@ -8,6 +8,8 @@ TownHall.__index = TownHall
 
 TownHall.Size  = 70
 TownHall.Costs = { Gold = 0, Metal = 0, Aether = 0 }
+TownHall.IncomeBonusGold = 0
+TownHall.IncomeBonusMetal = 0
 
 setmetatable(TownHall, { __index = Structure })
 
@@ -21,6 +23,8 @@ function TownHall:new()
 		0,             -- SpawnRate (no spawning)
 		TownHall.Costs
 	)
+	instance.IncomeBonusGold = TownHall.IncomeBonusGold
+	instance.IncomeBonusMetal = TownHall.IncomeBonusMetal
 	return instance
 end
 

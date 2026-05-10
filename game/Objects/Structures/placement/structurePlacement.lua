@@ -30,6 +30,23 @@ local function canPlaceStructureAt(entities, x, y, size)
 	return entities:CanPlaceStructureAt(x, y, size)
 end
 
+--- Checks whether the structure center/footprint is on the allowed team half.
+---@param x number
+---@param size number
+---@param team "player" | "enemy"
+---@return boolean
+local function isOnAllowedTeamSide(x, size, team)
+	local width = love.graphics.getDimensions()
+	local middleX = width / 2
+	local halfSize = size / 2
+
+	if team == "enemy" then
+		return (x - halfSize) >= middleX
+	end
+
+	return (x + halfSize) <= middleX
+end
+
 --- Places a structure of the given class at the given position.
 --- Returns nil if the class is unknown or the player cannot afford it or the position is invalid.
 ---@param structureClass table | nil
@@ -41,6 +58,8 @@ end
 ---@return Structure | nil The placed structure if successful, otherwise nil.
 ---@return string | nil reason Failure reason code when placement fails.
 function StructurePlacement.PlaceStructure(structureClass, resources, entities, x, y, team)
+	local requestedTeam = team or "player"
+
 	if not structureClass then
 		return nil, "invalid_type"
 	end
@@ -51,6 +70,10 @@ function StructurePlacement.PlaceStructure(structureClass, resources, entities, 
 
 	if not resources or type(resources.Spend) ~= "function" then
 		return nil, "invalid_resources"
+	end
+
+	if not isOnAllowedTeamSide(x, structureClass.Size, requestedTeam) then
+		return nil, "wrong_side"
 	end
 
 	local canPlace, placementReason = canPlaceStructureAt(entities, x, y, structureClass.Size)
@@ -64,7 +87,12 @@ function StructurePlacement.PlaceStructure(structureClass, resources, entities, 
 
 	local structure = structureClass:new()
 	structure:Place({ X = x, Y = y })
-	structure.Team = team or "player"
+	structure.Team = requestedTeam
+
+	if structure.Team == "player" and type(resources.AddIncomeBonus) == "function" then
+		resources:AddIncomeBonus(structure.IncomeBonusGold, structure.IncomeBonusMetal)
+	end
+
 	return structure, nil
 end
 

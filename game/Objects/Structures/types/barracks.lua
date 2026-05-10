@@ -11,6 +11,8 @@ Barracks.__index = Barracks
 
 Barracks.Size  = 32
 Barracks.Costs = { Gold = 50, Metal = 40, Aether = 0 }
+Barracks.IncomeBonusGold = 2
+Barracks.IncomeBonusMetal = 2
 
 setmetatable(Barracks, { __index = Structure })
 
@@ -24,6 +26,8 @@ function Barracks:new()
 		3,              -- SpawnRate
 		Barracks.Costs
 	)
+	instance.IncomeBonusGold = Barracks.IncomeBonusGold
+	instance.IncomeBonusMetal = Barracks.IncomeBonusMetal
 	instance.UnitClass = Knight
 	return instance
 end

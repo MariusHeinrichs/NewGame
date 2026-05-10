@@ -55,6 +55,9 @@ local function getPlacementFailureMessage(reason)
 	if reason == "out_of_bounds" then
 		return "Platzierung ausserhalb der Karte ist nicht erlaubt."
 	end
+	if reason == "wrong_side" then
+		return "Platzierung nur auf der eigenen Spielfeldhaelfte erlaubt."
+	end
 	if reason == "not_affordable" then
 		return "Nicht genug Ressourcen fuer diese Struktur."
 	end
@@ -172,9 +175,30 @@ function BattleInterface:Draw()
 
 	if self.Resources then
 		local width = love.graphics.getDimensions()
-		local hudText = string.format("Gold: %d   Metal: %d   Aether: %d", self.Resources.Gold, self.Resources.Metal,
-			self.Resources.Aether)
-		love.graphics.printf(hudText, 0, 10, width - 20, "right")
+		local rightX = width - 20
+		local columnWidth = 120
+		local topY = 10
+		local incomeY = topY + 16
+		local incomeInterval = self.Resources.IncomeInterval or 5
+		local goldIncome = self.Resources.BaseGoldIncomeValue or 0
+		local metalIncome = self.Resources.BaseMetalIncomeValue or 0
+		local aetherIncome = rawget(self.Resources, "BaseAetherIncomeValue") or 0
+
+		local goldColumnX = rightX - (columnWidth * 3)
+		local metalColumnX = rightX - (columnWidth * 2)
+		local aetherColumnX = rightX - columnWidth
+
+		love.graphics.printf(string.format("Gold: %d", self.Resources.Gold), goldColumnX, topY, columnWidth, "right")
+		love.graphics.printf(string.format("Metal: %d", self.Resources.Metal), metalColumnX, topY, columnWidth, "right")
+		love.graphics.printf(string.format("Aether: %d", self.Resources.Aether), aetherColumnX, topY, columnWidth,
+			"right")
+
+		love.graphics.printf(string.format("+%d / %ds", goldIncome, incomeInterval), goldColumnX, incomeY, columnWidth,
+			"right")
+		love.graphics.printf(string.format("+%d / %ds", metalIncome, incomeInterval), metalColumnX, incomeY, columnWidth,
+			"right")
+		love.graphics.printf(string.format("+%d / %ds", aetherIncome, incomeInterval), aetherColumnX, incomeY, columnWidth,
+			"right")
 	end
 
 	self.BarbarianButton:Draw()

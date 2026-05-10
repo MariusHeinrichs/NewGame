@@ -11,6 +11,8 @@ ArcherTower.__index = ArcherTower
 
 ArcherTower.Size  = 24
 ArcherTower.Costs = { Gold = 25, Metal = 10, Aether = 5 }
+ArcherTower.IncomeBonusGold = 1
+ArcherTower.IncomeBonusMetal = 2
 
 setmetatable(ArcherTower, { __index = Structure })
 
@@ -24,6 +26,8 @@ function ArcherTower:new()
 		1.5,                -- SpawnRate
 		ArcherTower.Costs
 	)
+	instance.IncomeBonusGold = ArcherTower.IncomeBonusGold
+	instance.IncomeBonusMetal = ArcherTower.IncomeBonusMetal
 	instance.UnitClass = Archer
 	return instance
 end

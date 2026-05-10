@@ -8,6 +8,8 @@ local DEFAULTS = {
 	SpawnRate = 5,
 	SpawnTimer = 0,
 	Costs = { Gold = 0, Metal = 0, Aether = 0 },
+	IncomeBonusGold = 0,
+	IncomeBonusMetal = 0,
 }
 
 ---@class Structure : Object
@@ -17,6 +19,8 @@ local DEFAULTS = {
 ---@field SpawnRate number
 ---@field SpawnTimer number
 ---@field Costs table
+---@field IncomeBonusGold number
+---@field IncomeBonusMetal number
 ---@field UnitClass table | nil
 ---@field Team "player" | "enemy"
 local Structure = {}
@@ -43,6 +47,8 @@ function Structure:new(Name, Health, Armor, Size, SpawnRate, Costs, Team)
 	newStructure.SpawnRate = SpawnRate or DEFAULTS.SpawnRate
 	newStructure.SpawnTimer = DEFAULTS.SpawnTimer
 	newStructure.Costs = Costs or DEFAULTS.Costs
+	newStructure.IncomeBonusGold = DEFAULTS.IncomeBonusGold
+	newStructure.IncomeBonusMetal = DEFAULTS.IncomeBonusMetal
 	newStructure.Team = Team or "player"
 	return newStructure
 end

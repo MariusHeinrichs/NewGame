@@ -11,6 +11,8 @@ MageTower.__index = MageTower
 
 MageTower.Size  = 26
 MageTower.Costs = { Gold = 20, Metal = 5, Aether = 15 }
+MageTower.IncomeBonusGold = 1
+MageTower.IncomeBonusMetal = 1
 
 setmetatable(MageTower, { __index = Structure })
 
@@ -24,6 +26,8 @@ function MageTower:new()
 		1.2,              -- SpawnRate
 		MageTower.Costs
 	)
+	instance.IncomeBonusGold = MageTower.IncomeBonusGold
+	instance.IncomeBonusMetal = MageTower.IncomeBonusMetal
 	instance.UnitClass = Mage
 	return instance
 end
