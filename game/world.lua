@@ -58,10 +58,7 @@ function World:Update(dt)
 	self.Entities:RemoveDeadUnits()
 
 	for _, structure in ipairs(structures) do
-		local spawnedUnit = structure:SpawnUnit(dt)
-		if spawnedUnit then
-			self.Entities:AddUnit(spawnedUnit)
-		end
+		self.Entities:TrySpawnUnitFromStructure(structure, dt)
 	end
 
 	self.Entities:RemoveDeadStructures()

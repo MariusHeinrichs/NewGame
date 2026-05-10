@@ -173,6 +173,17 @@ function BattleInterface:Draw()
 		love.graphics.setColor(1, 1, 1, 1)
 	end
 
+	local world = GameContext.Runtime.World
+	if world and world.Entities and type(world.Entities.GetUnitCountByTeam) == "function" then
+		local playerCount = world.Entities:GetUnitCountByTeam("player")
+		local enemyCount = world.Entities:GetUnitCountByTeam("enemy")
+		local maxUnits = world.Entities.MaxUnitsPerTeam or 0
+
+		love.graphics.setColor(1, 1, 1, 1)
+		love.graphics.printf(string.format("Spawn Player: %d/%d", playerCount, maxUnits), 20, 56, 260, "left")
+		love.graphics.printf(string.format("Spawn Enemy: %d/%d", enemyCount, maxUnits), 20, 74, 260, "left")
+	end
+
 	if self.Resources then
 		local width = love.graphics.getDimensions()
 		local rightX = width - 20

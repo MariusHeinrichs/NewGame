@@ -1,5 +1,6 @@
 local Collisions = require("src.collisions")
 local DEFAULT_CELL_SIZE = 128
+local DEFAULT_MAX_UNITS_PER_TEAM = 60
 
 ---@class WorldEntities
 ---@field Units table
@@ -8,6 +9,7 @@ local DEFAULT_CELL_SIZE = 128
 ---@field CellSize number
 ---@field SpatialCells table | nil
 ---@field MaxEntityRadius number
+---@field MaxUnitsPerTeam number
 local WorldEntities = {}
 WorldEntities.__index = WorldEntities
 
@@ -20,6 +22,7 @@ function WorldEntities:new()
 		CellSize = DEFAULT_CELL_SIZE,
 		SpatialCells = nil,
 		MaxEntityRadius = 0,
+		MaxUnitsPerTeam = DEFAULT_MAX_UNITS_PER_TEAM,
 	}, self)
 end
 
@@ -99,6 +102,46 @@ end
 ---@return table
 function WorldEntities:GetProjectiles()
 	return self.Projectiles
+end
+
+---@param team "player" | "enemy" | string | nil
+---@return number
+function WorldEntities:GetUnitCountByTeam(team)
+	local requestedTeam = team or "player"
+	local count = 0
+	for _, unit in ipairs(self.Units) do
+		if (unit.Team or "player") == requestedTeam then
+			count = count + 1
+		end
+	end
+	return count
+end
+
+---@param team "player" | "enemy" | string | nil
+---@return boolean
+function WorldEntities:CanTeamSpawnUnit(team)
+	return self:GetUnitCountByTeam(team) < self.MaxUnitsPerTeam
+end
+
+---@param structure table | nil
+---@param dt number
+---@return boolean
+function WorldEntities:TrySpawnUnitFromStructure(structure, dt)
+	if not structure or type(structure.SpawnUnit) ~= "function" then
+		return false
+	end
+
+	local structureTeam = structure.Team or "player"
+	if not self:CanTeamSpawnUnit(structureTeam) then
+		return false
+	end
+
+	local spawnedUnit = structure:SpawnUnit(dt)
+	if not spawnedUnit then
+		return false
+	end
+	self:AddUnit(spawnedUnit)
+	return true
 end
 
 ---@param splashImpact table | nil
