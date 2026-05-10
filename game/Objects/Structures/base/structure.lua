@@ -18,6 +18,7 @@ local DEFAULTS = {
 ---@field SpawnTimer number
 ---@field Costs table
 ---@field UnitClass table | nil
+---@field Team "player" | "enemy"
 local Structure = {}
 Structure.__index = Structure
 
@@ -32,8 +33,9 @@ setmetatable(Structure, { __index = Object })
 ---@param Size number | nil
 ---@param SpawnRate number | nil
 ---@param Costs table | nil
+---@param Team "player" | "enemy" | nil
 ---@return T
-function Structure:new(Name, Health, Armor, Size, SpawnRate, Costs)
+function Structure:new(Name, Health, Armor, Size, SpawnRate, Costs, Team)
 	local newStructure = Object.new(self, Name)
 	newStructure.Health = Health or DEFAULTS.Health
 	newStructure.Armor = Armor or DEFAULTS.Armor
@@ -41,12 +43,17 @@ function Structure:new(Name, Health, Armor, Size, SpawnRate, Costs)
 	newStructure.SpawnRate = SpawnRate or DEFAULTS.SpawnRate
 	newStructure.SpawnTimer = DEFAULTS.SpawnTimer
 	newStructure.Costs = Costs or DEFAULTS.Costs
+	newStructure.Team = Team or "player"
 	return newStructure
 end
 
 --- Draws the structure at its current position.
 function Structure:Draw()
-	love.graphics.setColor(0.5, 0.5, 0.5)
+	if self.Team == "enemy" then
+		love.graphics.setColor(0.8, 0.3, 0.2)
+	else
+		love.graphics.setColor(0.5, 0.5, 0.5)
+	end
 	love.graphics.rectangle("fill", self.Position.X - self.Size / 2, self.Position.Y - self.Size / 2, self.Size,
 		self.Size)
 	love.graphics.setColor(1, 1, 1)
@@ -67,8 +74,10 @@ function Structure:SpawnUnit(dt)
 	if self.SpawnTimer >= self.SpawnRate then
 		self.SpawnTimer = self.SpawnTimer - self.SpawnRate
 		local spawnedUnit = self.UnitClass:new(self.Name .. "_Unit")
+		spawnedUnit.Team = self.Team
 		local spawnOffset = (self.Size / 2) + spawnedUnit.Size + 1
-		spawnedUnit:Place({ X = self.Position.X + spawnOffset, Y = self.Position.Y })
+		local spawnDirection = (self.Team == "enemy") and -1 or 1
+		spawnedUnit:Place({ X = self.Position.X + (spawnOffset * spawnDirection), Y = self.Position.Y })
 		return spawnedUnit
 	end
 	return nil

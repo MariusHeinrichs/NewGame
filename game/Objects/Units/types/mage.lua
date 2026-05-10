@@ -18,7 +18,8 @@ function Mage:new(name)
 		2,    -- Armor
 		1.8,  -- Speed
 		9,    -- Size
-		100,  -- Range
+		100,  -- AttackRange
+		200,  -- AggroRange
 		0.6   -- AttackSpeed
 	)
 end

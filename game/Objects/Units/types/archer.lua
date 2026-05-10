@@ -18,7 +18,8 @@ function Archer:new(name)
 		3,    -- Armor
 		2.0,  -- Speed
 		8,    -- Size
-		120,  -- Range
+		120,  -- AttackRange
+		220,  -- AggroRange
 		1.5   -- AttackSpeed
 	)
 end

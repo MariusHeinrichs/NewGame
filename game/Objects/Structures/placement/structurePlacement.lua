@@ -1,5 +1,3 @@
-local Collisions = require("src.collisions")
-
 local StructurePlacement = {}
 
 --- Returns true if structureClass has the required placement shape.
@@ -22,48 +20,27 @@ local function isValidStructureClass(structureClass)
 end
 
 --- Checks whether a structure can be placed without overlapping existing entities.
----@param units table
----@param structures table
+---@param entities WorldEntities
 ---@param x number
 ---@param y number
 ---@param size number
 ---@return boolean
 ---@return string | nil
-local function canPlaceStructureAt(units, structures, x, y, size)
-	local targetX, targetY, targetW, targetH = Collisions.GetRectBounds(x, y, size)
-	local width, height = love.graphics.getDimensions()
-
-	if targetX < 0 or targetY < 0 or targetX + targetW > width or targetY + targetH > height then
-		return false, "out_of_bounds"
-	end
-
-	for _, structure in ipairs(structures) do
-		local sx, sy, sw, sh = Collisions.GetRectBounds(structure.Position.X, structure.Position.Y, structure.Size)
-		if Collisions.RectsOverlap(targetX, targetY, targetW, targetH, sx, sy, sw, sh) then
-			return false, "blocked_by_collision"
-		end
-	end
-
-	for _, unit in ipairs(units) do
-		if Collisions.CircleIntersectsRect(unit.Position.X, unit.Position.Y, unit.Size, targetX, targetY, targetW, targetH) then
-			return false, "blocked_by_collision"
-		end
-	end
-
-	return true, nil
+local function canPlaceStructureAt(entities, x, y, size)
+	return entities:CanPlaceStructureAt(x, y, size)
 end
 
 --- Places a structure of the given class at the given position.
 --- Returns nil if the class is unknown or the player cannot afford it or the position is invalid.
 ---@param structureClass table | nil
 ---@param resources Resources
----@param units table
----@param structures table
+---@param entities WorldEntities
 ---@param x number
 ---@param y number
+---@param team "player" | "enemy"
 ---@return Structure | nil The placed structure if successful, otherwise nil.
 ---@return string | nil reason Failure reason code when placement fails.
-function StructurePlacement.PlaceStructure(structureClass, resources, units, structures, x, y)
+function StructurePlacement.PlaceStructure(structureClass, resources, entities, x, y, team)
 	if not structureClass then
 		return nil, "invalid_type"
 	end
@@ -76,7 +53,7 @@ function StructurePlacement.PlaceStructure(structureClass, resources, units, str
 		return nil, "invalid_resources"
 	end
 
-	local canPlace, placementReason = canPlaceStructureAt(units, structures, x, y, structureClass.Size)
+	local canPlace, placementReason = canPlaceStructureAt(entities, x, y, structureClass.Size)
 	if not canPlace then
 		return nil, placementReason
 	end
@@ -87,6 +64,7 @@ function StructurePlacement.PlaceStructure(structureClass, resources, units, str
 
 	local structure = structureClass:new()
 	structure:Place({ X = x, Y = y })
+	structure.Team = team or "player"
 	return structure, nil
 end
 

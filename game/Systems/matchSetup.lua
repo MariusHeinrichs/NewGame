@@ -36,8 +36,8 @@ end
 function MatchSetup.InitializeDefault(world, resources)
 	local width, height = love.graphics.getDimensions()
 	local townHallMargin = width * 0.1
-	world:PlaceStructure("TownHall", resources, townHallMargin, height / 2)
-	world:PlaceStructure("TownHall", resources, width - townHallMargin, height / 2)
+	world:PlaceStructure("TownHall", resources, townHallMargin, height / 2, "player")
+	world:PlaceStructure("TownHall", resources, width - townHallMargin, height / 2, "enemy")
 end
 
 return MatchSetup

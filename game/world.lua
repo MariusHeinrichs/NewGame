@@ -2,17 +2,20 @@
 
 local StructurePlacement = require("Objects.Structures.placement.structurePlacement")
 local StructureRegistry = require("Objects.Structures.registry.structureRegistry")
-local Collisions = require("src.collisions")
+local WorldEntities = require("src.worldEntities")
 
 ---@class World
 ---@field Units table
 ---@field Structures table
+---@field Entities WorldEntities
 local World = {}
 World.__index = World
 
 ---@return World
 function World:new()
-	return setmetatable({ Units = {}, Structures = {} }, self)
+	local units = {}
+	local structures = {}
+	return setmetatable({ Units = units, Structures = structures, Entities = WorldEntities:new(units, structures) }, self)
 end
 
 ---@param unit Unit
@@ -25,40 +28,17 @@ function World:AddStructure(structure)
 	table.insert(self.Structures, structure)
 end
 
---- Checks if a unit would collide with another entity at a target position.
----@param movingUnit Unit
----@param nextX number
----@param nextY number
----@return boolean
-function World:WillUnitCollide(movingUnit, nextX, nextY)
-	for _, structure in ipairs(self.Structures) do
-		local rx, ry, rw, rh = Collisions.GetRectBounds(structure.Position.X, structure.Position.Y, structure.Size)
-		if Collisions.CircleIntersectsRect(nextX, nextY, movingUnit.Size, rx, ry, rw, rh) then
-			return true
-		end
-	end
-
-	for _, otherUnit in ipairs(self.Units) do
-		if otherUnit ~= movingUnit and Collisions.CirclesOverlap(nextX, nextY, movingUnit.Size, otherUnit.Position.X, otherUnit.Position.Y,
-				otherUnit.Size) then
-			return true
-		end
-	end
-
-	return false
-end
-
 --- Places a structure of the given type at the given position, if a type is selected.
 ---@param selectedStructureType string | nil
 ---@param resources Resources
 ---@param x number
 ---@param y number
+---@param team "player" | "enemy"
 ---@return boolean placed True when structure was successfully placed.
 ---@return string | nil reason Failure reason code when placement fails.
-function World:PlaceStructure(selectedStructureType, resources, x, y)
+function World:PlaceStructure(selectedStructureType, resources, x, y, team)
 	local structureClass = StructureRegistry.GetByType(selectedStructureType)
-	local structure, reason = StructurePlacement.PlaceStructure(structureClass, resources, self.Units,
-		self.Structures, x, y)
+	local structure, reason = StructurePlacement.PlaceStructure(structureClass, resources, self.Entities, x, y, team)
 	if structure then
 		self:AddStructure(structure)
 		return true, nil
@@ -69,18 +49,20 @@ end
 --- Updates all entities. Moves units, removes dead ones, spawns new ones from structures.
 ---@param dt number
 function World:Update(dt)
-	for i = #self.Units, 1, -1 do
-		local unit = self.Units[i]
-		local nextX, nextY = unit:GetNextPosition("right")
-		if not self:WillUnitCollide(unit, nextX, nextY) then
-			unit:MoveTo(nextX, nextY)
-		else
-			unit:UpdateHealthFromWindowBounds()
-		end
-		if unit.Health <= 0 then
-			table.remove(self.Units, i)
-		end
+	self.Entities:RebuildSpatialIndex()
+
+	for _, unit in ipairs(self.Units) do
+		local nextX, nextY = unit:CalculateNextPosition(self.Entities)
+		unit:MoveTo(nextX, nextY)
 	end
+
+	self.Entities:RemoveDeadUnits()
+	self.Entities:RebuildSpatialIndex()
+
+	for _, unit in ipairs(self.Units) do
+		unit:UpdateCombat(dt, self.Entities)
+	end
+	self.Entities:RemoveDeadUnits()
 
 	for _, structure in ipairs(self.Structures) do
 		local spawnedUnit = structure:SpawnUnit(dt)
@@ -88,6 +70,8 @@ function World:Update(dt)
 			self:AddUnit(spawnedUnit)
 		end
 	end
+
+	self.Entities:RemoveDeadStructures()
 end
 
 --- Draws all entities.

@@ -18,7 +18,8 @@ function Barbarian:new(name)
 		5,    -- Armor
 		2.5,  -- Speed
 		10,   -- Size
-		40,   -- Range
+		40,   -- AttackRange
+		130,  -- AggroRange
 		1.0   -- AttackSpeed
 	)
 end

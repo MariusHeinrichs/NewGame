@@ -18,7 +18,8 @@ function Knight:new(name)
 		15,   -- Armor
 		1.5,  -- Speed
 		12,   -- Size
-		30,   -- Range
+		30,   -- AttackRange
+		120,  -- AggroRange
 		0.8   -- AttackSpeed
 	)
 end
