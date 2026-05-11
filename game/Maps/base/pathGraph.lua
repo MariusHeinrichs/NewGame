@@ -5,6 +5,7 @@ PathGraph.__index = PathGraph
 
 ---@class PathGraph
 
+--- Creates a new PathGraph.
 ---@param id string | nil
 ---@param team "player" | "enemy" | nil
 ---@param waypoints table | nil
@@ -17,17 +18,20 @@ function PathGraph:new(id, team, waypoints)
 	}, self)
 end
 
+--- Adds a waypoint to the path graph.
 ---@param x number
 ---@param y number
 function PathGraph:AddWaypoint(x, y)
 	table.insert(self.Waypoints, { X = x, Y = y })
 end
 
+--- Returns the list of waypoints for the path graph.
 ---@return table
 function PathGraph:GetWaypoints()
 	return self.Waypoints
 end
 
+--- Returns the index of the closest waypoint to the given coordinates.
 ---@param x number
 ---@param y number
 ---@return number | nil
@@ -51,6 +55,7 @@ function PathGraph:GetClosestWaypointIndex(x, y)
 	return bestIndex
 end
 
+--- Returns the waypoint at the given index.
 ---@param index number
 ---@return table | nil
 function PathGraph:GetWaypoint(index)

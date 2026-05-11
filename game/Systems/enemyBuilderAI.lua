@@ -18,6 +18,7 @@ local function randomBetween(minValue, maxValue)
 	return minValue + (love.math.random() * (maxValue - minValue))
 end
 
+--- Picks a random structure type from the list of available types.
 ---@param structureTypes string[]
 ---@return string
 local function pickRandomStructureType(structureTypes)
@@ -25,13 +26,13 @@ local function pickRandomStructureType(structureTypes)
 	return structureTypes[randomIndex]
 end
 
+--- Creates a new instance of the EnemyBuilderAI.
 ---@class EnemyBuilderAI
 ---@field PlacementInterval number
 ---@field PlacementTimer number
 ---@field MaxPlacementAttempts number
 ---@field StructureTypes string[]
 ---@field EnemyResourcesProxy table
-
 ---@param config {PlacementInterval: number | nil, MaxPlacementAttempts: number | nil, StructureTypes: string[] | nil} | nil
 ---@return EnemyBuilderAI
 function EnemyBuilderAI:new(config)
@@ -56,6 +57,7 @@ function EnemyBuilderAI:new(config)
 	return enemyBuilderAI
 end
 
+--- Tries to place an enemy structure on the map.
 ---@return boolean
 function EnemyBuilderAI:TryPlaceEnemyStructure()
 	if #self.StructureTypes == 0 then
@@ -86,6 +88,7 @@ function EnemyBuilderAI:TryPlaceEnemyStructure()
 	return false
 end
 
+--- Updates the EnemyBuilderAI.
 ---@param dt number
 function EnemyBuilderAI:Update(dt)
 	if not GameContext.Runtime.World then

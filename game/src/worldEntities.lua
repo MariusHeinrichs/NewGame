@@ -16,6 +16,7 @@ local DEFAULT_MAX_UNITS_PER_TEAM = 60
 local WorldEntities = {}
 WorldEntities.__index = WorldEntities
 
+--- Creates a new WorldEntities instance.
 ---@return WorldEntities
 function WorldEntities:new()
 	return setmetatable({
@@ -32,6 +33,7 @@ function WorldEntities:new()
 	}, self)
 end
 
+--- Sets the map for the WorldEntities instance.
 ---@param map table | nil
 function WorldEntities:SetMap(map)
 	self.Map = map
@@ -59,21 +61,25 @@ function WorldEntities:SetMap(map)
 	end
 end
 
+--- Adds a unit to the WorldEntities instance.
 ---@param unit table
 function WorldEntities:AddUnit(unit)
 	table.insert(self.Units, unit)
 end
 
+--- Adds a structure to the WorldEntities instance.
 ---@param structure table
 function WorldEntities:AddStructure(structure)
 	table.insert(self.Structures, structure)
 end
 
+--- Adds a projectile to the WorldEntities instance.
 ---@param projectile table
 function WorldEntities:AddProjectile(projectile)
 	table.insert(self.Projectiles, projectile)
 end
 
+--- Returns the world bounds as a tuple (x, y, width, height).
 ---@return number, number, number, number
 function WorldEntities:GetWorldBounds()
 	if self.WorldBounds then
@@ -83,6 +89,7 @@ function WorldEntities:GetWorldBounds()
 	return 0, 0, width, height
 end
 
+--- Checks if a circle intersects with a boundary.
 ---@param boundary table | nil
 ---@param x number
 ---@param y number
@@ -109,6 +116,7 @@ local function boundaryIntersectsCircle(boundary, x, y, radius)
 	return false
 end
 
+--- Checks if a rectangle intersects with a boundary.
 ---@param boundary table | nil
 ---@param x number
 ---@param y number
@@ -140,6 +148,7 @@ local function boundaryIntersectsRect(boundary, x, y, w, h)
 	return false
 end
 
+--- Checks if a unit can be spawned at the given position.
 ---@param x number
 ---@param y number
 ---@param radius number
@@ -168,6 +177,7 @@ function WorldEntities:CanSpawnUnitAt(x, y, radius)
 	return true
 end
 
+--- Returns the cell key
 ---@param cellX number
 ---@param cellY number
 ---@return string
@@ -175,6 +185,7 @@ local function getCellKey(cellX, cellY)
 	return tostring(cellX) .. ":" .. tostring(cellY)
 end
 
+--- Returns the cell coordinates for a given position.
 ---@param x number
 ---@param y number
 ---@param cellSize number
@@ -183,6 +194,7 @@ local function getCellCoords(x, y, cellSize)
 	return math.floor(x / cellSize), math.floor(y / cellSize)
 end
 
+--- Inserts an entity into the specified cell.
 ---@param cells table
 ---@param cellX number
 ---@param cellY number
@@ -216,21 +228,25 @@ function WorldEntities:RebuildSpatialIndex()
 	self.MaxEntityRadius = maxRadius
 end
 
+--- Returns the list of units in the world.
 ---@return table
 function WorldEntities:GetUnits()
 	return self.Units
 end
 
+--- Returns the list of structures in the world.
 ---@return table
 function WorldEntities:GetStructures()
 	return self.Structures
 end
 
+--- Returns the list of projectiles in the world.
 ---@return table
 function WorldEntities:GetProjectiles()
 	return self.Projectiles
 end
 
+--- Returns the unit count by team.
 ---@param team "player" | "enemy" | string | nil
 ---@return number
 function WorldEntities:GetUnitCountByTeam(team)
@@ -244,12 +260,14 @@ function WorldEntities:GetUnitCountByTeam(team)
 	return count
 end
 
+--- Returns if a unit can be spawned for the given team.
 ---@param team "player" | "enemy" | string | nil
 ---@return boolean
 function WorldEntities:CanTeamSpawnUnit(team)
 	return self:GetUnitCountByTeam(team) < self.MaxUnitsPerTeam
 end
 
+--- Tries to spawn a unit from the given structure.
 ---@param structure table | nil
 ---@param dt number
 ---@return boolean
@@ -274,6 +292,7 @@ function WorldEntities:TrySpawnUnitFromStructure(structure, dt)
 	return true
 end
 
+--- Applies splash damage from a projectile impact.
 ---@param splashImpact table | nil
 function WorldEntities:ApplyProjectileSplash(splashImpact)
 	if splashImpact == nil then
@@ -312,6 +331,7 @@ function WorldEntities:ApplyProjectileSplash(splashImpact)
 	end
 end
 
+--- Updates all projectiles in the world.
 ---@param dt number
 function WorldEntities:UpdateProjectiles(dt)
 	for i = #self.Projectiles, 1, -1 do
@@ -324,6 +344,7 @@ function WorldEntities:UpdateProjectiles(dt)
 	end
 end
 
+--- Finds the closest enemy unit to the given source unit.
 ---@param sourceUnit table
 ---@param isTargetInRange fun(target: table): boolean
 ---@return table | nil
@@ -362,6 +383,7 @@ function WorldEntities:FindClosestEnemy(sourceUnit, isTargetInRange)
 	return closestTarget
 end
 
+--- Finds the enemy town hall for the given team.
 ---@param team "player" | "enemy"
 ---@return Structure | nil
 function WorldEntities:GetEnemyTownHall(team)
@@ -373,6 +395,7 @@ function WorldEntities:GetEnemyTownHall(team)
 	return nil
 end
 
+--- Checks if a moving unit will collide with any obstacles at the given position.
 ---@param movingUnit table
 ---@param nextX number
 ---@param nextY number
@@ -403,6 +426,7 @@ function WorldEntities:WillUnitCollide(movingUnit, nextX, nextY)
 	return false
 end
 
+--- Checks if a structure can be placed at the given position.
 ---@param x number
 ---@param y number
 ---@param size number
@@ -439,6 +463,7 @@ function WorldEntities:CanPlaceStructureAt(x, y, size)
 	return true, nil
 end
 
+--- Removes all units with health <= 0 from the world.
 ---@return number removedCount
 function WorldEntities:RemoveDeadUnits()
 	local removedCount = 0
@@ -451,6 +476,7 @@ function WorldEntities:RemoveDeadUnits()
 	return removedCount
 end
 
+--- Removes all structures with health <= 0 from the world.
 ---@return number removedCount
 function WorldEntities:RemoveDeadStructures()
 	local removedCount = 0

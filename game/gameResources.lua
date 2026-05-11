@@ -17,6 +17,7 @@ local INCOME_INTERVAL_SECONDS = 5
 local Resources = {}
 Resources.__index = Resources
 
+--- Description of function Resources:new.
 ---@param gold number | nil
 ---@param metal number | nil
 ---@param aether number | nil
@@ -46,16 +47,19 @@ function Resources:Update(dt)
 	end
 end
 
+--- Description of function Resources:AddGold.
 ---@param amount number
 function Resources:AddGold(amount)
 	self.Gold = self.Gold + amount
 end
 
+--- Description of function Resources:AddMetal.
 ---@param amount number
 function Resources:AddMetal(amount)
 	self.Metal = self.Metal + amount
 end
 
+--- Description of function Resources:AddAether.
 ---@param amount number
 function Resources:AddAether(amount)
 	self.Aether = self.Aether + amount

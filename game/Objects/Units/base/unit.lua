@@ -15,6 +15,7 @@ local DEFAULTS = {
 	AttackSpeed = 1,
 }
 
+--- Description of function distanceSquared.
 ---@param x1 number
 ---@param y1 number
 ---@param x2 number
@@ -81,6 +82,7 @@ function Unit:new(Name, Health, Damage, Armor, Speed, Size, AttackRange, AggroRa
 	return newUnit
 end
 
+--- Checks if the target can be kept as the retaliation target.
 ---@param target Unit | Structure | nil
 ---@return boolean
 function Unit:CanKeepRetaliationTarget(target)
@@ -109,12 +111,14 @@ function Unit:OnDamaged(attacker)
 	self.CurrentTarget = attacker
 end
 
+--- Checks if the target is alive.
 ---@param target Unit | Structure | nil
 ---@return boolean
 function Unit:IsTargetAlive(target)
 	return target ~= nil and (target.Health or 0) > 0
 end
 
+--- Checks if the target is an enemy.
 ---@param target Unit | Structure | nil
 ---@return boolean
 function Unit:IsTargetEnemy(target)

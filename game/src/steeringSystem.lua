@@ -17,6 +17,7 @@ local PADDING = {
 	WorldEdgeAvoid = 18,
 }
 
+--- Description of function normalize.
 ---@param x number
 ---@param y number
 ---@return number, number
@@ -28,6 +29,7 @@ local function normalize(x, y)
 	return x / len, y / len
 end
 
+--- Description of function clamp.
 ---@param value number
 ---@param minValue number
 ---@param maxValue number
@@ -42,6 +44,7 @@ local function clamp(value, minValue, maxValue)
 	return value
 end
 
+--- Description of function getRectRepulsion.
 ---@param x number
 ---@param y number
 ---@param rx number
@@ -66,6 +69,7 @@ local function getRectRepulsion(x, y, rx, ry, rw, rh)
 	return dx / dist, dy / dist, dist
 end
 
+--- Description of function getDesiredDirection.
 ---@param unit table
 ---@param targetX number | nil
 ---@param targetY number | nil
@@ -77,6 +81,7 @@ local function getDesiredDirection(unit, targetX, targetY)
 	return normalize(targetX - unit.Position.X, targetY - unit.Position.Y)
 end
 
+--- Description of function getSeparationForce.
 ---@param unit table
 ---@param entities WorldEntities
 ---@return number, number
@@ -105,6 +110,7 @@ local function getSeparationForce(unit, entities)
 	return forceX, forceY
 end
 
+--- Description of function getObstacleForce.
 ---@param unit table
 ---@param entities WorldEntities
 ---@return number, number
@@ -173,6 +179,7 @@ local function getObstacleForce(unit, entities)
 	return forceX, forceY
 end
 
+--- Description of function resolveCollisionFallback.
 ---@param unit table
 ---@param entities WorldEntities
 ---@param moveDirX number
@@ -197,6 +204,7 @@ local function resolveCollisionFallback(unit, entities, moveDirX, moveDirY)
 	return unit.Position.X, unit.Position.Y
 end
 
+--- Description of function SteeringSystem.GetNextPosition.
 ---@param unit table
 ---@param entities WorldEntities
 ---@param targetX number | nil

@@ -18,6 +18,7 @@ MeleeStructure.__index = MeleeStructure
 
 setmetatable(MeleeStructure, { __index = Structure })
 
+--- Creates a new melee structure.
 ---@generic T : MeleeStructure
 ---@param self T
 ---@param Name string | nil
@@ -41,6 +42,7 @@ function MeleeStructure:new(Name, Health, Armor, Size, Damage, AttackRange, Atta
 	return newStructure
 end
 
+--- Performs an attack on the target.
 ---@param target Unit | Structure
 function MeleeStructure:PerformAttack(target)
 	local dmg = math.max(1, self.Damage - (target.Armor or 0))
@@ -50,6 +52,7 @@ function MeleeStructure:PerformAttack(target)
 	end
 end
 
+--- Updates the combat state of the melee structure.
 ---@param dt number
 ---@param entities WorldEntities
 function MeleeStructure:UpdateCombat(dt, entities)

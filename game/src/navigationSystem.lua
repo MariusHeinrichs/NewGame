@@ -4,6 +4,7 @@ local NavigationSystem = {}
 
 local WAYPOINT_REACHED_DISTANCE = 14
 
+--- Returns the path assigned to the unit, or finds a new one if necessary.
 ---@param unit table
 ---@param map table
 ---@return table | nil
@@ -33,6 +34,7 @@ local function getPathForUnit(unit, map)
 	return selectedPath
 end
 
+--- Returns the current waypoint index for the unit.
 ---@param unit table
 ---@param path table
 ---@return number | nil
@@ -76,6 +78,7 @@ local function getCurrentWaypointIndex(unit, path)
 	return path:GetClosestWaypointIndex(unit.Position.X, unit.Position.Y)
 end
 
+--- Picks the next waypoint for the unit.
 ---@param unit table
 ---@param path table
 ---@return table | nil
@@ -104,6 +107,7 @@ local function pickWaypoint(unit, path)
 	return waypoint
 end
 
+--- Returns the target point for the unit along its path.
 ---@param unit table
 ---@param entities WorldEntities
 ---@return number | nil, number | nil
@@ -130,6 +134,7 @@ function NavigationSystem.GetPathTargetPoint(unit, entities)
 	return waypoint.X, waypoint.Y
 end
 
+--- Returns a fallback position for the unit along its path.
 ---@param unit table
 ---@param entities WorldEntities
 ---@return number | nil, number | nil

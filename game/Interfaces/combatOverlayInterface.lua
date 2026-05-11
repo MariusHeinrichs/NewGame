@@ -15,6 +15,7 @@ function CombatOverlayInterface:new()
 	return setmetatable({}, self)
 end
 
+--- Safely returns a number, falling back to a default if the value is nil or not a number.
 ---@param value number | nil
 ---@param fallback number
 ---@return number
@@ -25,6 +26,7 @@ local function safeNumber(value, fallback)
 	return fallback
 end
 
+--- Draws a health bar.
 ---@param x number
 ---@param y number
 ---@param width number
@@ -45,6 +47,7 @@ local function drawBar(x, y, width, height, ratio, team)
 	love.graphics.setColor(1, 1, 1, 1)
 end
 
+--- Draws a health bar for a given entity.
 ---@param entity Unit | Structure
 ---@param maxHealth number
 ---@param yOffset number
@@ -62,6 +65,7 @@ local function drawEntityBar(entity, maxHealth, yOffset)
 	drawBar(barX, barY, BAR_WIDTH, BAR_HEIGHT, ratio, entity.Team)
 end
 
+--- Draws all health bars for units and structures in the given world.
 ---@param world World | nil
 function CombatOverlayInterface:Draw(world)
 	if not world or not world.Entities then

@@ -11,6 +11,7 @@ local WorldEntities = require("src.worldEntities")
 local World = {}
 World.__index = World
 
+--- Description of function drawPathDebug.
 ---@param path table | nil
 local function drawPathDebug(path)
 	if not path or type(path.GetWaypoints) ~= "function" then
@@ -39,6 +40,7 @@ local function drawPathDebug(path)
 	end
 end
 
+--- Description of function drawBoundaryDebug.
 ---@param boundary table | nil
 local function drawBoundaryDebug(boundary)
 	if not boundary or not boundary.Shape then
@@ -69,6 +71,7 @@ local function drawBoundaryDebug(boundary)
 	end
 end
 
+--- Description of function drawMapDebug.
 ---@param map table | nil
 local function drawMapDebug(map)
 	if not map then
@@ -90,6 +93,7 @@ local function drawMapDebug(map)
 	love.graphics.setColor(1, 1, 1, 1)
 end
 
+--- Description of function assignStructurePath.
 ---@param self World
 ---@param structure table | nil
 local function assignStructurePath(self, structure)
@@ -111,6 +115,7 @@ local function assignStructurePath(self, structure)
 	end
 end
 
+--- Description of function translateEntityPosition.
 ---@param entity table | nil
 ---@param deltaX number
 ---@param deltaY number
@@ -122,6 +127,7 @@ local function translateEntityPosition(entity, deltaX, deltaY)
 	entity.Position.Y = entity.Position.Y + deltaY
 end
 
+--- Description of function translateWorldEntities.
 ---@param entities WorldEntities
 ---@param deltaX number
 ---@param deltaY number
@@ -142,6 +148,7 @@ local function translateWorldEntities(entities, deltaX, deltaY)
 	entities:RebuildSpatialIndex()
 end
 
+--- Description of function runMovementPhase.
 ---@param entities WorldEntities
 ---@param units table
 local function runMovementPhase(entities, units)
@@ -156,6 +163,7 @@ local function runMovementPhase(entities, units)
 	entities:RebuildSpatialIndex()
 end
 
+--- Description of function runCombatPhase.
 ---@param entities WorldEntities
 ---@param units table
 ---@param structures table
@@ -169,6 +177,7 @@ local function runCombatPhase(entities, units, structures, dt)
 	end
 end
 
+--- Description of function runProjectileAndCleanupPhase.
 ---@param entities WorldEntities
 ---@param dt number
 local function runProjectileAndCleanupPhase(entities, dt)
@@ -176,6 +185,7 @@ local function runProjectileAndCleanupPhase(entities, dt)
 	entities:RemoveDeadUnits()
 end
 
+--- Description of function runSpawnPhase.
 ---@param entities WorldEntities
 ---@param structures table
 ---@param dt number
@@ -196,6 +206,7 @@ function World:new()
 	}, self)
 end
 
+--- Description of function World:SetMap.
 ---@param map table | nil
 function World:SetMap(map)
 	if map and type(map.CenterInWindow) == "function" then
@@ -205,6 +216,7 @@ function World:SetMap(map)
 	self.Entities:SetMap(map)
 end
 
+--- Description of function World:HandleResize.
 ---@param width number
 ---@param height number
 function World:HandleResize(width, height)
@@ -217,6 +229,7 @@ function World:HandleResize(width, height)
 	self.Entities:SetMap(self.Map)
 end
 
+--- Description of function World:SetMapDebugEnabled.
 ---@param enabled boolean
 function World:SetMapDebugEnabled(enabled)
 	self.ShowMapDebug = enabled == true
@@ -228,6 +241,7 @@ function World:ToggleMapDebug()
 	return self.ShowMapDebug
 end
 
+--- Description of function World:AddStructure.
 ---@param structure table
 function World:AddStructure(structure)
 	assignStructurePath(self, structure)

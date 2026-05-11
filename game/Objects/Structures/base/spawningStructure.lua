@@ -7,6 +7,7 @@ local DEFAULTS = {
 	SpawnTimer = 0,
 }
 
+--- Normalizes a vector.
 ---@param x number
 ---@param y number
 ---@return number, number
@@ -18,6 +19,7 @@ local function normalizeVector(x, y)
 	return x / len, y / len
 end
 
+--- Clamps a value between a minimum and maximum.
 ---@param value number
 ---@param minValue number
 ---@param maxValue number
@@ -32,6 +34,7 @@ local function clamp(value, minValue, maxValue)
 	return value
 end
 
+--- Resolves the forward direction for the spawning structure.
 ---@param entities WorldEntities | nil
 ---@param structure SpawningStructure
 ---@return number, number
@@ -94,6 +97,7 @@ local function resolveForwardDirection(entities, structure)
 	return normalizedX, normalizedY
 end
 
+--- Builds the spawn candidates for the spawning structure.
 ---@param structure SpawningStructure
 ---@param unitRadius number
 ---@param forwardX number
@@ -134,6 +138,7 @@ local function buildSpawnCandidates(structure, unitRadius, forwardX, forwardY)
 	}
 end
 
+--- Finds a suitable spawn position for a unit.
 ---@param entities WorldEntities | nil
 ---@param structure SpawningStructure
 ---@param unitRadius number
@@ -165,6 +170,7 @@ SpawningStructure.__index = SpawningStructure
 
 setmetatable(SpawningStructure, { __index = Structure })
 
+--- Creates a new spawning structure.
 ---@generic T : SpawningStructure
 ---@param self T
 ---@param Name string | nil
@@ -188,6 +194,7 @@ function SpawningStructure:new(Name, Health, Armor, Size, SpawnRate, UnitClass, 
 	return newStructure
 end
 
+--- Spawns a unit if the spawn timer has reached the spawn rate.
 ---@param dt number
 ---@param entities WorldEntities | nil
 ---@return Unit | nil

@@ -28,6 +28,7 @@ RangeStructure.__index = RangeStructure
 
 setmetatable(RangeStructure, { __index = Structure })
 
+--- Creates a new range structure.
 ---@generic T : RangeStructure
 ---@param self T
 ---@param Name string | nil
@@ -61,6 +62,7 @@ function RangeStructure:new(Name, Health, Armor, Size, Damage, AttackRange, Atta
 	return newStructure
 end
 
+--- Performs an attack on the target.
 ---@param target Unit | Structure
 ---@param entities WorldEntities
 function RangeStructure:PerformAttack(target, entities)
@@ -84,6 +86,7 @@ function RangeStructure:PerformAttack(target, entities)
 	entities:AddProjectile(projectile)
 end
 
+--- Updates the combat state of the range structure.
 ---@param dt number
 ---@param entities WorldEntities
 function RangeStructure:UpdateCombat(dt, entities)

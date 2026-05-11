@@ -57,18 +57,21 @@ function Structure:new(Name, Health, Armor, Size, Costs, IncomeBonusGold, Income
 	return newStructure
 end
 
+--- Checks if the target is alive.
 ---@param target Unit | Structure | nil
 ---@return boolean
 function Structure:IsTargetAlive(target)
 	return target ~= nil and (target.Health or 0) > 0
 end
 
+--- Checks if the target is an enemy.
 ---@param target Unit | Structure | nil
 ---@return boolean
 function Structure:IsTargetEnemy(target)
 	return target ~= nil and target.Team ~= nil and target.Team ~= self.Team
 end
 
+--- Gets the radius of the target.
 ---@param target Unit | Structure
 ---@return number
 function Structure:GetTargetRadius(target)
@@ -78,6 +81,7 @@ function Structure:GetTargetRadius(target)
 	return target.Size or 0
 end
 
+--- Checks if the target is within attack range.
 ---@param target Unit | Structure
 ---@return boolean
 function Structure:IsTargetInRange(target)
@@ -89,6 +93,7 @@ function Structure:IsTargetInRange(target)
 	return distSq <= (range * range)
 end
 
+--- Checks if the target is within aggro range.
 ---@param target Unit | Structure
 ---@return boolean
 function Structure:IsTargetInAggroRange(target)
@@ -100,6 +105,7 @@ function Structure:IsTargetInAggroRange(target)
 	return distSq <= (range * range)
 end
 
+--- Searches for the closest enemy within aggro range.
 ---@param entities WorldEntities
 ---@return Unit | Structure | nil
 function Structure:SearchForEnemy(entities)
@@ -108,6 +114,7 @@ function Structure:SearchForEnemy(entities)
 	end)
 end
 
+--- Searches for the closest enemy within attack range.
 ---@param entities WorldEntities
 ---@return Unit | Structure | nil
 function Structure:SearchForEnemyToAttack(entities)
@@ -116,6 +123,7 @@ function Structure:SearchForEnemyToAttack(entities)
 	end)
 end
 
+--- Checks if the structure can keep its current target.
 ---@param target Unit | Structure | nil
 ---@return boolean
 function Structure:CanKeepCurrentTarget(target)
@@ -128,6 +136,7 @@ function Structure:CanKeepCurrentTarget(target)
 	return self:IsTargetInAggroRange(target)
 end
 
+--- Checks if the structure can keep its retaliation target.
 ---@param target Unit | Structure | nil
 ---@return boolean
 function Structure:CanKeepRetaliationTarget(target)
@@ -156,6 +165,7 @@ function Structure:OnDamaged(attacker)
 	self.CurrentTarget = attacker
 end
 
+--- Refreshes the current target of the structure.
 ---@param entities WorldEntities
 ---@return Unit | Structure | nil
 function Structure:RefreshTarget(entities)
@@ -166,6 +176,7 @@ function Structure:RefreshTarget(entities)
 	return self.CurrentTarget
 end
 
+--- Updates the combat state of the structure.
 ---@param dt number
 ---@param entities WorldEntities
 function Structure:UpdateCombat(dt, entities)
@@ -174,6 +185,7 @@ function Structure:UpdateCombat(dt, entities)
 	return
 end
 
+--- Spawns a unit if the spawn timer has reached the spawn rate.
 ---@param dt number
 ---@return Unit | nil
 function Structure:SpawnUnit(dt)

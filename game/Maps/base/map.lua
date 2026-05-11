@@ -7,6 +7,7 @@ Map.__index = Map
 
 ---@class Map
 
+--- Translates a point by the given delta values.
 ---@param point table | nil
 ---@param deltaX number
 ---@param deltaY number
@@ -18,6 +19,7 @@ local function translatePoint(point, deltaX, deltaY)
 	point.Y = point.Y + deltaY
 end
 
+--- Translates a path by the given delta values.
 ---@param path table | nil
 ---@param deltaX number
 ---@param deltaY number
@@ -30,6 +32,7 @@ local function translatePath(path, deltaX, deltaY)
 	end
 end
 
+--- Translates a boundary by the given delta values.
 ---@param boundary table | nil
 ---@param deltaX number
 ---@param deltaY number
@@ -41,6 +44,7 @@ local function translateBoundary(boundary, deltaX, deltaY)
 	boundary.Shape.Y = boundary.Shape.Y + deltaY
 end
 
+--- Creates a new Map.
 ---@param id string
 ---@param width number
 ---@param height number
@@ -59,6 +63,7 @@ function Map:new(id, width, height)
 	}, self)
 end
 
+--- Translates the map by the given delta values.
 ---@param deltaX number
 ---@param deltaY number
 function Map:TranslateBy(deltaX, deltaY)
@@ -86,6 +91,7 @@ function Map:TranslateBy(deltaX, deltaY)
 	end
 end
 
+--- Centers the map in the window.
 ---@param windowWidth number | nil
 ---@param windowHeight number | nil
 ---@return number, number
@@ -100,16 +106,19 @@ function Map:CenterInWindow(windowWidth, windowHeight)
 	return deltaX, deltaY
 end
 
+--- Returns the origin of the map.
 ---@return number, number
 function Map:GetOrigin()
 	return self.OriginX, self.OriginY
 end
 
+--- Returns the world bounds of the map.
 ---@return number, number, number, number
 function Map:GetWorldBounds()
 	return self.OriginX, self.OriginY, self.Width, self.Height
 end
 
+--- Adds a starting structure to the map.
 ---@param structureType string
 ---@param x number
 ---@param y number
@@ -123,11 +132,13 @@ function Map:AddStartingStructure(structureType, x, y, team)
 	})
 end
 
+--- Returns the list of starting structures for the map.
 ---@return table
 function Map:GetStartingStructures()
 	return self.StartingStructures
 end
 
+--- Applies the initial state of the map to the given world, placing starting structures as needed.
 ---@param world World
 function Map:ApplyInitialState(world)
 	if not world or type(world.AddStructure) ~= "function" then
@@ -145,16 +156,19 @@ function Map:ApplyInitialState(world)
 	end
 end
 
+--- Adds a path to the map.
 ---@param path table
 function Map:AddPath(path)
 	table.insert(self.Paths, path)
 end
 
+--- Adds a boundary to the map.
 ---@param boundary table
 function Map:AddBoundary(boundary)
 	table.insert(self.Boundaries, boundary)
 end
 
+--- Sets the spawn point for a team.
 ---@param team "player" | "enemy"
 ---@param x number
 ---@param y number
@@ -162,17 +176,20 @@ function Map:SetSpawnPoint(team, x, y)
 	self.SpawnPoints[team] = { X = x, Y = y }
 end
 
+--- Returns the spawn point for a team.
 ---@param team "player" | "enemy"
 ---@return table | nil
 function Map:GetSpawnPoint(team)
 	return self.SpawnPoints[team]
 end
 
+--- Returns the list of boundaries for the map.
 ---@return table
 function Map:GetBoundaries()
 	return self.Boundaries
 end
 
+--- Returns the list of paths for a team.
 ---@param team "player" | "enemy"
 ---@return table
 function Map:GetPathsForTeam(team)
@@ -185,6 +202,7 @@ function Map:GetPathsForTeam(team)
 	return paths
 end
 
+--- Returns the path with the given ID.
 ---@param id string | nil
 ---@return table | nil
 function Map:GetPathById(id)
@@ -201,6 +219,7 @@ function Map:GetPathById(id)
 	return nil
 end
 
+--- Returns the primary path for a team.
 ---@param team "player" | "enemy"
 ---@return table | nil
 function Map:GetPrimaryPathForTeam(team)
@@ -215,6 +234,7 @@ function Map:GetPrimaryPathForTeam(team)
 	return nil
 end
 
+--- Returns the closest path for a team to the given coordinates.
 ---@param x number
 ---@param y number
 ---@param team "player" | "enemy"
@@ -247,6 +267,7 @@ function Map:GetClosestPathForTeam(x, y, team)
 	return bestPath or self:GetPrimaryPathForTeam(team)
 end
 
+--- Gets the dimensions of the map.
 ---@return number, number
 function Map:GetDimensions()
 	return self.Width, self.Height

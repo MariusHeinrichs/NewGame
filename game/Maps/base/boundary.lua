@@ -5,6 +5,7 @@ Boundary.__index = Boundary
 
 ---@class Boundary
 
+--- Creates a new Boundary.
 ---@param shape table
 ---@param blocksMovement boolean | nil
 ---@param blocksPlacement boolean | nil
@@ -20,6 +21,7 @@ function Boundary:new(shape, blocksMovement, blocksPlacement, tags)
 	return setmetatable(boundary, self)
 end
 
+--- Creates a rectangular Boundary.
 ---@param x number
 ---@param y number
 ---@param width number
@@ -32,6 +34,7 @@ function Boundary:Rect(x, y, width, height, blocksMovement, blocksPlacement, tag
 	return self:new({ Type = "rect", X = x, Y = y, Width = width, Height = height }, blocksMovement, blocksPlacement, tags)
 end
 
+--- Creates a circular Boundary.
 ---@param x number
 ---@param y number
 ---@param radius number

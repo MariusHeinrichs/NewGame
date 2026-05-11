@@ -37,6 +37,7 @@ end
 local BattleInterface = {}
 BattleInterface.__index = BattleInterface
 
+--- Returns a user-friendly message for a placement failure reason.
 ---@param reason string | nil
 ---@return string
 local function getPlacementFailureMessage(reason)
@@ -102,6 +103,7 @@ function BattleInterface:new(resources)
 	return battleInterface
 end
 
+--- Updates the BattleInterface.
 ---@param dt number
 function BattleInterface:Update(dt)
 	if self.PlacementHintTimeLeft > 0 then
@@ -112,6 +114,7 @@ function BattleInterface:Update(dt)
 	end
 end
 
+--- Shows a placement failure message for a specified reason.
 ---@param reason string | nil
 function BattleInterface:ShowPlacementFailure(reason)
 	self.PlacementHintText = getPlacementFailureMessage(reason)

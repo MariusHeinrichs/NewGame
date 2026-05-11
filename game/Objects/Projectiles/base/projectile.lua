@@ -16,6 +16,7 @@
 local Projectile = {}
 Projectile.__index = Projectile
 
+--- Gets the radius of the target.
 ---@param target Unit | Structure | nil
 ---@return number
 local function getTargetRadius(target)
@@ -28,6 +29,7 @@ local function getTargetRadius(target)
 	return target.Size or 0
 end
 
+--- Creates a new projectile.
 ---@param x number
 ---@param y number
 ---@param target Unit | Structure
@@ -62,12 +64,14 @@ function Projectile:IsActive()
 	return self.Active
 end
 
+--- Checks if the target is alive.
 ---@param target Unit | Structure | nil
 ---@return boolean
 local function isTargetAlive(target)
 	return target ~= nil and (target.Health or 0) > 0
 end
 
+--- Applies damage to the target.
 ---@param target Unit | Structure
 function Projectile:ApplyHit(target)
 	local dmg = math.max(1, self.Damage - (target.Armor or 0))
@@ -78,6 +82,7 @@ function Projectile:ApplyHit(target)
 	self.Active = false
 end
 
+--- Builds the splash impact for the projectile.
 ---@param impactX number
 ---@param impactY number
 ---@param directTarget Unit | Structure | nil
@@ -98,6 +103,7 @@ function Projectile:BuildSplashImpact(impactX, impactY, directTarget)
 	}
 end
 
+--- Updates the projectile's position and checks for collisions.
 ---@param dt number
 ---@return table | nil
 function Projectile:Update(dt)
@@ -152,6 +158,7 @@ function Projectile:Update(dt)
 	return nil
 end
 
+--- Draws the projectile.
 function Projectile:Draw()
 	if self.Style == "fireball" then
 		local x, y, r = self.Position.X, self.Position.Y, self.Radius
