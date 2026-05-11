@@ -107,7 +107,7 @@ end
 ---@param unit table
 ---@param entities WorldEntities
 ---@return number | nil, number | nil
-function NavigationSystem.GetPathFallbackPosition(unit, entities)
+function NavigationSystem.GetPathTargetPoint(unit, entities)
 	if not entities or not entities.Map then
 		return nil, nil
 	end
@@ -127,8 +127,20 @@ function NavigationSystem.GetPathFallbackPosition(unit, entities)
 		return nil, nil
 	end
 
-	local dx = waypoint.X - unit.Position.X
-	local dy = waypoint.Y - unit.Position.Y
+	return waypoint.X, waypoint.Y
+end
+
+---@param unit table
+---@param entities WorldEntities
+---@return number | nil, number | nil
+function NavigationSystem.GetPathFallbackPosition(unit, entities)
+	local waypointX, waypointY = NavigationSystem.GetPathTargetPoint(unit, entities)
+	if not waypointX or not waypointY then
+		return nil, nil
+	end
+
+	local dx = waypointX - unit.Position.X
+	local dy = waypointY - unit.Position.Y
 	local dist = math.sqrt(dx * dx + dy * dy)
 	if dist <= 0 then
 		return unit.Position.X, unit.Position.Y

@@ -2,6 +2,7 @@
 
 local Object = require("BaseClasses.object")
 local NavigationSystem = require("src.navigationSystem")
+local SteeringSystem = require("src.steeringSystem")
 
 local DEFAULTS = {
 	Health = 100,
@@ -14,27 +15,6 @@ local DEFAULTS = {
 	AttackSpeed = 1,
 }
 
-local AVOIDANCE = {
-	LockSwitchPenalty = 4200, -- High penalty while a lock is active to prevent rapid direction flips.
-	SoftSwitchPenalty = 700, -- Smaller penalty after lock to keep short-term directional stability.
-	StickTicksNew = 6, -- Initial lock duration when a new vertical avoidance direction is chosen.
-	StickTicksKeep = 5, -- Minimum lock duration when continuing in the same avoidance direction.
-	TieEpsilon = 120, -- Score window where candidates are treated as equivalent and tie-break rules apply.
-}
-
----@return number
-local function random01()
-	if love and love.math and love.math.random then
-		return love.math.random()
-	end
-	return math.random()
-end
-
----@return number
-local function randomVerticalSign()
-	return (random01() < 0.5) and -1 or 1
-end
-
 ---@param x1 number
 ---@param y1 number
 ---@param x2 number
@@ -44,29 +24,6 @@ local function distanceSquared(x1, y1, x2, y2)
 	local dx = x2 - x1
 	local dy = y2 - y1
 	return dx * dx + dy * dy
-end
-
----@param x number
----@param y number
----@return number, number
-local function normalizeVector(x, y)
-	local len = math.sqrt(x * x + y * y)
-	if len == 0 then
-		return 0, 0
-	end
-	return x / len, y / len
-end
-
----@param dy number
----@return integer
-local function toVerticalDirection(dy)
-	if dy > 0.01 then
-		return 1
-	end
-	if dy < -0.01 then
-		return -1
-	end
-	return 0
 end
 
 ---@class Unit : Object
@@ -121,9 +78,6 @@ function Unit:new(Name, Health, Damage, Armor, Speed, Size, AttackRange, AggroRa
 	newUnit.HadAggroTarget = false
 	newUnit.CurrentTarget = nil
 	newUnit.RetaliationTarget = nil
-	newUnit.AvoidancePreferredY = 0
-	newUnit.AvoidanceStickTicks = 0
-	newUnit.AvoidanceLastVerticalY = 0 -- Initial tie-break falls back to random up/down.
 	return newUnit
 end
 
@@ -308,127 +262,6 @@ function Unit:PerformAttack(target, entities)
 	error("Unit:PerformAttack must be implemented by a subclass")
 end
 
---- Returns an alternative nearby position when the direct path is blocked.
----@param entities WorldEntities
----@param nextX number
----@param nextY number
----@param target Unit | Structure | nil
----@return number, number
-function Unit:GetCollisionAvoidancePosition(entities, nextX, nextY, target)
-	local function buildCandidates(step, forwardX, forwardY)
-		local lateralAX, lateralAY = -forwardY, forwardX
-		local lateralBX, lateralBY = forwardY, -forwardX
-		local backX, backY = -forwardX, -forwardY
-		local diagonalScale = 1 / math.sqrt(1 + 0.25)
-
-		return {
-			{ x = self.Position.X + lateralAX * step, y = self.Position.Y + lateralAY * step }, -- around obstacle
-			{ x = self.Position.X + lateralBX * step, y = self.Position.Y + lateralBY * step },
-			{ x = self.Position.X,                    y = self.Position.Y - step },              -- explicit up/down
-			{ x = self.Position.X,                    y = self.Position.Y + step },
-			{
-				x = self.Position.X + (lateralAX + backX * 0.5) * step * diagonalScale,
-				y = self.Position.Y + (lateralAY + backY * 0.5) * step * diagonalScale,
-			},
-			{
-				x = self.Position.X + (lateralBX + backX * 0.5) * step * diagonalScale,
-				y = self.Position.Y + (lateralBY + backY * 0.5) * step * diagonalScale,
-			},
-			{ x = self.Position.X + backX * step, y = self.Position.Y + backY * step }, -- opposite direction fallback
-		}
-	end
-
-	local function scoreCandidate(candidate, candidateDirY, preferredY)
-		local directionPenalty = 0
-		if preferredY ~= 0 and candidateDirY ~= 0 and candidateDirY ~= preferredY then
-			directionPenalty = directionPenalty + AVOIDANCE.LockSwitchPenalty
-		elseif self.AvoidancePreferredY ~= 0 and candidateDirY ~= 0 and candidateDirY ~= self.AvoidancePreferredY then
-			directionPenalty = directionPenalty + AVOIDANCE.SoftSwitchPenalty
-		end
-
-		if target then
-			local tx = target.Position.X - candidate.x
-			local ty = target.Position.Y - candidate.y
-			local distSq = tx * tx + ty * ty
-			local range = self.AttackRange + self:GetTargetRadius(target)
-			local inRangeGap = math.max(0, distSq - (range * range))
-			return directionPenalty + inRangeGap + (distSq * 0.001)
-		end
-
-		return directionPenalty + math.abs(candidate.y - nextY)
-	end
-
-	local preferredY = 0
-	if self.AvoidanceStickTicks > 0 then
-		preferredY = self.AvoidancePreferredY
-		self.AvoidanceStickTicks = self.AvoidanceStickTicks - 1
-	end
-
-	local baseDx = nextX - self.Position.X
-	local baseDy = nextY - self.Position.Y
-	if baseDx == 0 and baseDy == 0 and target then
-		baseDx = target.Position.X - self.Position.X
-		baseDy = target.Position.Y - self.Position.Y
-	end
-
-	local forwardX, forwardY = normalizeVector(baseDx, baseDy)
-	if forwardX == 0 and forwardY == 0 then
-		forwardX = (self.Team == "enemy") and -1 or 1
-		forwardY = 0
-	end
-
-	local step = self.Speed
-	local candidates = buildCandidates(step, forwardX, forwardY)
-
-	-- Larger units need more candidate directions to avoid getting trapped by tight local geometry.
-	local extraSamples = math.min(18, 6 + math.floor(self.Size / 4))
-	local startAngle = random01() * math.pi * 2
-	for i = 1, extraSamples do
-		local angle = startAngle + ((i - 1) / extraSamples) * math.pi * 2
-		candidates[#candidates + 1] = {
-			x = self.Position.X + math.cos(angle) * step,
-			y = self.Position.Y + math.sin(angle) * step,
-		}
-	end
-
-	local bestX, bestY = self.Position.X, self.Position.Y
-	local bestScore = math.huge
-	local bestDirY = 0
-
-	for _, candidate in ipairs(candidates) do
-		if not entities:WillUnitCollide(self, candidate.x, candidate.y) then
-			local candidateDirY = toVerticalDirection(candidate.y - self.Position.Y)
-			local score = scoreCandidate(candidate, candidateDirY, preferredY)
-
-			if score < bestScore then
-				bestScore = score
-				bestX, bestY = candidate.x, candidate.y
-				bestDirY = candidateDirY
-			elseif math.abs(score - bestScore) <= AVOIDANCE.TieEpsilon and candidateDirY ~= 0 and bestDirY ~= 0 then
-				if candidateDirY ~= bestDirY and random01() < 0.5 then
-					bestScore = score
-					bestX, bestY = candidate.x, candidate.y
-					bestDirY = candidateDirY
-				end
-			end
-		end
-	end
-
-	local chosenDirY = toVerticalDirection(bestY - self.Position.Y)
-
-	if chosenDirY ~= 0 then
-		self.AvoidanceLastVerticalY = chosenDirY
-		if chosenDirY == self.AvoidancePreferredY then
-			self.AvoidanceStickTicks = math.max(self.AvoidanceStickTicks, AVOIDANCE.StickTicksKeep)
-		else
-			self.AvoidancePreferredY = chosenDirY
-			self.AvoidanceStickTicks = AVOIDANCE.StickTicksNew
-		end
-	end
-
-	return bestX, bestY
-end
-
 --- Returns the next desired position based on aggro and attack ranges.
 ---@param entities WorldEntities
 ---@return number, number
@@ -441,42 +274,22 @@ function Unit:CalculateNextPosition(entities)
 	end
 	self.HadAggroTarget = hasAggroTarget
 
-	local nextX, nextY
-	local pursuitTarget = nil
+	local targetX, targetY = nil, nil
 
 	if aggroTarget and self:IsTargetInRange(aggroTarget) then
 		return self.Position.X, self.Position.Y
 	elseif aggroTarget then
-		local dx = aggroTarget.Position.X - self.Position.X
-		local dy = aggroTarget.Position.Y - self.Position.Y
-		local dist = math.sqrt(dx * dx + dy * dy)
-		pursuitTarget = aggroTarget
-		if dist > 0 then
-			nextX = self.Position.X + (dx / dist) * self.Speed
-			nextY = self.Position.Y + (dy / dist) * self.Speed
-		else
-			nextX, nextY = self.Position.X, self.Position.Y
-		end
+		targetX = aggroTarget.Position.X
+		targetY = aggroTarget.Position.Y
 	else
-		local pathNextX, pathNextY = NavigationSystem.GetPathFallbackPosition(self, entities)
-		if pathNextX and pathNextY then
-			nextX, nextY = pathNextX, pathNextY
-		else
-			local direction = (self.Team == "enemy") and "left" or "right"
-			nextX, nextY = self:GetNextPosition(direction)
+		targetX, targetY = NavigationSystem.GetPathTargetPoint(self, entities)
+		if not targetX or not targetY then
+			local fallbackDirection = (self.Team == "enemy") and "left" or "right"
+			targetX, targetY = self:GetNextPosition(fallbackDirection)
 		end
 	end
 
-	if entities:WillUnitCollide(self, nextX, nextY) then
-		if pursuitTarget then
-			return self:GetCollisionAvoidancePosition(entities, nextX, nextY, pursuitTarget)
-		end
-		return self:GetCollisionAvoidancePosition(entities, nextX, nextY, nil)
-	end
-
-	self.AvoidanceStickTicks = math.max(0, self.AvoidanceStickTicks - 1)
-
-	return nextX, nextY
+	return SteeringSystem.GetNextPosition(self, entities, targetX, targetY)
 end
 
 --- Updates attack cooldown and attacks enemies in attack range.
