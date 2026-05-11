@@ -6,6 +6,7 @@ local Boundary = require("Maps.base.boundary")
 
 local DefaultMap = {}
 
+--- Creates a new default map.
 ---@return Map
 function DefaultMap.Create()
 	local width, height = 1280, 720
