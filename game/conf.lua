@@ -22,8 +22,8 @@ function love.conf(t)
 
 	t.window.title          = "Castle Fight"
 	t.window.icon           = nil
-	t.window.width          = 1920
-	t.window.height         = 1080
+	t.window.width          = 1280
+	t.window.height         = 720
 	t.window.borderless     = false
 	t.window.resizable      = true
 	t.window.minwidth       = 1

@@ -111,6 +111,37 @@ local function assignStructurePath(self, structure)
 	end
 end
 
+---@param entity table | nil
+---@param deltaX number
+---@param deltaY number
+local function translateEntityPosition(entity, deltaX, deltaY)
+	if not entity or not entity.Position then
+		return
+	end
+	entity.Position.X = entity.Position.X + deltaX
+	entity.Position.Y = entity.Position.Y + deltaY
+end
+
+---@param entities WorldEntities
+---@param deltaX number
+---@param deltaY number
+local function translateWorldEntities(entities, deltaX, deltaY)
+	if deltaX == 0 and deltaY == 0 then
+		return
+	end
+
+	for _, unit in ipairs(entities:GetUnits()) do
+		translateEntityPosition(unit, deltaX, deltaY)
+	end
+	for _, structure in ipairs(entities:GetStructures()) do
+		translateEntityPosition(structure, deltaX, deltaY)
+	end
+	for _, projectile in ipairs(entities:GetProjectiles()) do
+		translateEntityPosition(projectile, deltaX, deltaY)
+	end
+	entities:RebuildSpatialIndex()
+end
+
 ---@param entities WorldEntities
 ---@param units table
 local function runMovementPhase(entities, units)
@@ -167,8 +198,23 @@ end
 
 ---@param map table | nil
 function World:SetMap(map)
+	if map and type(map.CenterInWindow) == "function" then
+		map:CenterInWindow(love.graphics.getDimensions())
+	end
 	self.Map = map
 	self.Entities:SetMap(map)
+end
+
+---@param width number
+---@param height number
+function World:HandleResize(width, height)
+	if not self.Map or type(self.Map.CenterInWindow) ~= "function" then
+		return
+	end
+
+	local deltaX, deltaY = self.Map:CenterInWindow(width, height)
+	translateWorldEntities(self.Entities, deltaX, deltaY)
+	self.Entities:SetMap(self.Map)
 end
 
 ---@param enabled boolean

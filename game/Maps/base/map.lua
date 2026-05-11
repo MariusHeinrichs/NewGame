@@ -7,6 +7,40 @@ Map.__index = Map
 
 ---@class Map
 
+---@param point table | nil
+---@param deltaX number
+---@param deltaY number
+local function translatePoint(point, deltaX, deltaY)
+	if not point then
+		return
+	end
+	point.X = point.X + deltaX
+	point.Y = point.Y + deltaY
+end
+
+---@param path table | nil
+---@param deltaX number
+---@param deltaY number
+local function translatePath(path, deltaX, deltaY)
+	if not path or type(path.GetWaypoints) ~= "function" then
+		return
+	end
+	for _, waypoint in ipairs(path:GetWaypoints()) do
+		translatePoint(waypoint, deltaX, deltaY)
+	end
+end
+
+---@param boundary table | nil
+---@param deltaX number
+---@param deltaY number
+local function translateBoundary(boundary, deltaX, deltaY)
+	if not boundary or not boundary.Shape then
+		return
+	end
+	boundary.Shape.X = boundary.Shape.X + deltaX
+	boundary.Shape.Y = boundary.Shape.Y + deltaY
+end
+
 ---@param id string
 ---@param width number
 ---@param height number
@@ -16,11 +50,64 @@ function Map:new(id, width, height)
 		Id = id,
 		Width = width,
 		Height = height,
+		OriginX = 0,
+		OriginY = 0,
 		Paths = {},
 		Boundaries = {},
 		SpawnPoints = {},
 		StartingStructures = {},
 	}, self)
+end
+
+---@param deltaX number
+---@param deltaY number
+function Map:TranslateBy(deltaX, deltaY)
+	if deltaX == 0 and deltaY == 0 then
+		return
+	end
+
+	self.OriginX = self.OriginX + deltaX
+	self.OriginY = self.OriginY + deltaY
+
+	for _, path in ipairs(self.Paths) do
+		translatePath(path, deltaX, deltaY)
+	end
+
+	for _, boundary in ipairs(self.Boundaries) do
+		translateBoundary(boundary, deltaX, deltaY)
+	end
+
+	for _, spawnPoint in pairs(self.SpawnPoints) do
+		translatePoint(spawnPoint, deltaX, deltaY)
+	end
+
+	for _, startingStructure in ipairs(self.StartingStructures) do
+		translatePoint(startingStructure, deltaX, deltaY)
+	end
+end
+
+---@param windowWidth number | nil
+---@param windowHeight number | nil
+---@return number, number
+function Map:CenterInWindow(windowWidth, windowHeight)
+	local width = windowWidth or love.graphics.getWidth()
+	local height = windowHeight or love.graphics.getHeight()
+	local targetOriginX = (width - self.Width) / 2
+	local targetOriginY = (height - self.Height) / 2
+	local deltaX = targetOriginX - self.OriginX
+	local deltaY = targetOriginY - self.OriginY
+	self:TranslateBy(deltaX, deltaY)
+	return deltaX, deltaY
+end
+
+---@return number, number
+function Map:GetOrigin()
+	return self.OriginX, self.OriginY
+end
+
+---@return number, number, number, number
+function Map:GetWorldBounds()
+	return self.OriginX, self.OriginY, self.Width, self.Height
 end
 
 ---@param structureType string

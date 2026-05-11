@@ -77,6 +77,10 @@ function love.draw()
 end
 
 function love.resize(w, h)
+	if runtime.World and type(runtime.World.HandleResize) == "function" then
+		runtime.World:HandleResize(w, h)
+	end
+
 	if interfaces.Start then
 		interfaces.Start:RebuildLayout()
 	end

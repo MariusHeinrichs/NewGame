@@ -20,13 +20,18 @@ local function isValidStructureClass(structureClass)
 end
 
 --- Checks whether the structure center/footprint is on the allowed team half.
+---@param entities WorldEntities | nil
 ---@param x number
 ---@param size number
 ---@param team "player" | "enemy"
 ---@return boolean
-local function isOnAllowedTeamSide(x, size, team)
-	local width = love.graphics.getDimensions()
-	local middleX = width / 2
+local function isOnAllowedTeamSide(entities, x, size, team)
+	local boundsX = 0
+	local width = love.graphics.getWidth()
+	if entities and type(entities.GetWorldBounds) == "function" then
+		boundsX, _, width = entities:GetWorldBounds()
+	end
+	local middleX = boundsX + (width / 2)
 	local halfSize = size / 2
 
 	if team == "enemy" then
@@ -61,7 +66,7 @@ function StructurePlacement.PlaceStructure(structureClass, resources, entities, 
 		return nil, "invalid_resources"
 	end
 
-	if not isOnAllowedTeamSide(x, structureClass.Size, requestedTeam) then
+	if not isOnAllowedTeamSide(entities, x, structureClass.Size, requestedTeam) then
 		return nil, "wrong_side"
 	end
 

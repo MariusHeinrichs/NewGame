@@ -8,7 +8,7 @@ local DEFAULT_MAX_UNITS_PER_TEAM = 60
 ---@field Projectiles table
 ---@field Boundaries table
 ---@field Map table | nil
----@field WorldBounds { Width: number, Height: number } | nil
+---@field WorldBounds { X: number, Y: number, Width: number, Height: number } | nil
 ---@field CellSize number
 ---@field SpatialCells table | nil
 ---@field MaxEntityRadius number
@@ -46,10 +46,15 @@ function WorldEntities:SetMap(map)
 		self.Boundaries = map:GetBoundaries() or {}
 	end
 
-	if type(map["GetDimensions"]) == "function" then
+	if type(map["GetWorldBounds"]) == "function" then
+		local originX, originY, width, height = map:GetWorldBounds()
+		if originX and originY and width and height then
+			self.WorldBounds = { X = originX, Y = originY, Width = width, Height = height }
+		end
+	elseif type(map["GetDimensions"]) == "function" then
 		local width, height = map:GetDimensions()
 		if width and height then
-			self.WorldBounds = { Width = width, Height = height }
+			self.WorldBounds = { X = 0, Y = 0, Width = width, Height = height }
 		end
 	end
 end
@@ -69,12 +74,13 @@ function WorldEntities:AddProjectile(projectile)
 	table.insert(self.Projectiles, projectile)
 end
 
----@return number, number
-function WorldEntities:GetWorldDimensions()
+---@return number, number, number, number
+function WorldEntities:GetWorldBounds()
 	if self.WorldBounds then
-		return self.WorldBounds.Width, self.WorldBounds.Height
+		return self.WorldBounds.X, self.WorldBounds.Y, self.WorldBounds.Width, self.WorldBounds.Height
 	end
-	return love.graphics.getDimensions()
+	local width, height = love.graphics.getDimensions()
+	return 0, 0, width, height
 end
 
 ---@param boundary table | nil
@@ -140,9 +146,10 @@ end
 ---@return boolean
 function WorldEntities:CanSpawnUnitAt(x, y, radius)
 	local unitRadius = radius or 0
-	local width, height = self:GetWorldDimensions()
+	local boundsX, boundsY, width, height = self:GetWorldBounds()
 
-	if x - unitRadius < 0 or y - unitRadius < 0 or x + unitRadius > width or y + unitRadius > height then
+	if x - unitRadius < boundsX or y - unitRadius < boundsY
+		or x + unitRadius > (boundsX + width) or y + unitRadius > (boundsY + height) then
 		return false
 	end
 
@@ -397,9 +404,10 @@ end
 ---@return string | nil
 function WorldEntities:CanPlaceStructureAt(x, y, size)
 	local targetX, targetY, targetW, targetH = Collisions.GetRectBounds(x, y, size)
-	local width, height = self:GetWorldDimensions()
+	local boundsX, boundsY, width, height = self:GetWorldBounds()
 
-	if targetX < 0 or targetY < 0 or targetX + targetW > width or targetY + targetH > height then
+	if targetX < boundsX or targetY < boundsY
+		or targetX + targetW > (boundsX + width) or targetY + targetH > (boundsY + height) then
 		return false, "out_of_bounds"
 	end
 
