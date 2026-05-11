@@ -30,6 +30,14 @@ function GameInputRouter.HandleKeyPressed(key)
 		return true
 	end
 
+	if key == "f3" and (gameState.Mode == GameStateModes.RUNNING or gameState.Mode == GameStateModes.PAUSE) then
+		local world = GameContext.Runtime.World
+		if world and type(world.ToggleMapDebug) == "function" then
+			world:ToggleMapDebug()
+			return true
+		end
+	end
+
 	if key == "return" and gameState.Mode == GameStateModes.START then
 		GameStateTransitions.EnterMenu()
 		return true

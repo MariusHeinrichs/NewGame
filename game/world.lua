@@ -6,8 +6,110 @@ local WorldEntities = require("src.worldEntities")
 
 ---@class World
 ---@field Entities WorldEntities
+---@field Map table | nil
+---@field ShowMapDebug boolean
 local World = {}
 World.__index = World
+
+---@param path table | nil
+local function drawPathDebug(path)
+	if not path or type(path.GetWaypoints) ~= "function" then
+		return
+	end
+
+	local waypoints = path:GetWaypoints()
+	if not waypoints or #waypoints == 0 then
+		return
+	end
+
+	if path.Team == "enemy" then
+		love.graphics.setColor(0.95, 0.35, 0.35, 0.8)
+	else
+		love.graphics.setColor(0.2, 0.85, 0.35, 0.8)
+	end
+
+	for i = 1, #waypoints - 1 do
+		local startPoint = waypoints[i]
+		local endPoint = waypoints[i + 1]
+		love.graphics.line(startPoint.X, startPoint.Y, endPoint.X, endPoint.Y)
+	end
+
+	for _, point in ipairs(waypoints) do
+		love.graphics.circle("fill", point.X, point.Y, 3)
+	end
+end
+
+---@param boundary table | nil
+local function drawBoundaryDebug(boundary)
+	if not boundary or not boundary.Shape then
+		return
+	end
+
+	if boundary.BlocksMovement == false and boundary.BlocksPlacement == false then
+		love.graphics.setColor(0.6, 0.6, 0.6, 0.35)
+	elseif boundary.BlocksMovement and boundary.BlocksPlacement then
+		love.graphics.setColor(0.95, 0.75, 0.2, 0.4)
+	elseif boundary.BlocksMovement then
+		love.graphics.setColor(0.95, 0.45, 0.2, 0.4)
+	else
+		love.graphics.setColor(0.35, 0.75, 0.95, 0.4)
+	end
+
+	if boundary.Shape.Type == "rect" then
+		love.graphics.rectangle("fill", boundary.Shape.X, boundary.Shape.Y, boundary.Shape.Width, boundary.Shape.Height)
+		love.graphics.setColor(1, 1, 1, 0.7)
+		love.graphics.rectangle("line", boundary.Shape.X, boundary.Shape.Y, boundary.Shape.Width, boundary.Shape.Height)
+		return
+	end
+
+	if boundary.Shape.Type == "circle" then
+		love.graphics.circle("fill", boundary.Shape.X, boundary.Shape.Y, boundary.Shape.Radius)
+		love.graphics.setColor(1, 1, 1, 0.7)
+		love.graphics.circle("line", boundary.Shape.X, boundary.Shape.Y, boundary.Shape.Radius)
+	end
+end
+
+---@param map table | nil
+local function drawMapDebug(map)
+	if not map then
+		return
+	end
+
+	if map.Paths then
+		for _, path in ipairs(map.Paths) do
+			drawPathDebug(path)
+		end
+	end
+
+	if map.Boundaries then
+		for _, boundary in ipairs(map.Boundaries) do
+			drawBoundaryDebug(boundary)
+		end
+	end
+
+	love.graphics.setColor(1, 1, 1, 1)
+end
+
+---@param self World
+---@param structure table | nil
+local function assignStructurePath(self, structure)
+	if not structure or not structure.Position or not self.Map then
+		return
+	end
+
+	if structure.PathId and type(self.Map["GetPathById"]) == "function" and self.Map:GetPathById(structure.PathId) then
+		return
+	end
+
+	if type(self.Map["GetClosestPathForTeam"]) ~= "function" then
+		return
+	end
+
+	local closestPath = self.Map:GetClosestPathForTeam(structure.Position.X, structure.Position.Y, structure.Team)
+	if closestPath and closestPath.Id then
+		structure.PathId = closestPath.Id
+	end
+end
 
 ---@param entities WorldEntities
 ---@param units table
@@ -56,7 +158,34 @@ end
 
 ---@return World
 function World:new()
-	return setmetatable({ Entities = WorldEntities:new() }, self)
+	return setmetatable({
+		Entities = WorldEntities:new(),
+		Map = nil,
+		ShowMapDebug = false,
+	}, self)
+end
+
+---@param map table | nil
+function World:SetMap(map)
+	self.Map = map
+	self.Entities:SetMap(map)
+end
+
+---@param enabled boolean
+function World:SetMapDebugEnabled(enabled)
+	self.ShowMapDebug = enabled == true
+end
+
+---@return boolean
+function World:ToggleMapDebug()
+	self.ShowMapDebug = not self.ShowMapDebug
+	return self.ShowMapDebug
+end
+
+---@param structure table
+function World:AddStructure(structure)
+	assignStructurePath(self, structure)
+	self.Entities:AddStructure(structure)
 end
 
 --- Places a structure of the given type at the given position, if a type is selected.
@@ -71,7 +200,7 @@ function World:PlaceStructure(selectedStructureType, resources, x, y, team)
 	local structureClass = StructureRegistry.GetByType(selectedStructureType)
 	local structure, reason = StructurePlacement.PlaceStructure(structureClass, resources, self.Entities, x, y, team)
 	if structure then
-		self.Entities:AddStructure(structure)
+		self:AddStructure(structure)
 		return true, nil
 	end
 	return false, reason
@@ -98,6 +227,10 @@ end
 
 --- Draws all entities.
 function World:Draw()
+	if self.ShowMapDebug then
+		drawMapDebug(self.Map)
+	end
+
 	for _, unit in ipairs(self.Entities:GetUnits()) do
 		unit:Draw()
 	end

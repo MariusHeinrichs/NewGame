@@ -1,6 +1,7 @@
 --- Unit class representing a game unit with health, damage, armor, speed, size, aggro range, attack range, and attack speed attributes.
 
 local Object = require("BaseClasses.object")
+local NavigationSystem = require("src.navigationSystem")
 
 local DEFAULTS = {
 	Health = 100,
@@ -79,6 +80,9 @@ end
 ---@field AggroRange number
 ---@field AttackSpeed number
 ---@field Team "player" | "enemy"
+---@field PathId string | nil
+---@field PathWaypointIndex number | nil
+---@field HadAggroTarget boolean
 ---@field CurrentTarget Unit | Structure | nil
 ---@field RetaliationTarget Unit | Structure | nil
 local Unit = {}
@@ -112,6 +116,9 @@ function Unit:new(Name, Health, Damage, Armor, Speed, Size, AttackRange, AggroRa
 	newUnit.AggroRange = AggroRange or DEFAULTS.AggroRange
 	newUnit.AttackSpeed = AttackSpeed or DEFAULTS.AttackSpeed
 	newUnit.Team = Team or "player"
+	newUnit.PathId = nil
+	newUnit.PathWaypointIndex = nil
+	newUnit.HadAggroTarget = false
 	newUnit.CurrentTarget = nil
 	newUnit.RetaliationTarget = nil
 	newUnit.AvoidancePreferredY = 0
@@ -288,7 +295,8 @@ function Unit:RefreshTarget(entities)
 		return aggroTarget
 	end
 
-	self.CurrentTarget = self:GetEnemyTownHall(entities)
+	-- Keep lane/path movement active when no nearby enemy is in aggro range.
+	self.CurrentTarget = nil
 	return self.CurrentTarget
 end
 
@@ -426,6 +434,13 @@ end
 ---@return number, number
 function Unit:CalculateNextPosition(entities)
 	local aggroTarget = self:RefreshTarget(entities)
+	local hasAggroTarget = aggroTarget ~= nil
+	if self.HadAggroTarget and not hasAggroTarget then
+		self.PathId = nil
+		self.PathWaypointIndex = nil
+	end
+	self.HadAggroTarget = hasAggroTarget
+
 	local nextX, nextY
 	local pursuitTarget = nil
 
@@ -443,8 +458,13 @@ function Unit:CalculateNextPosition(entities)
 			nextX, nextY = self.Position.X, self.Position.Y
 		end
 	else
-		local direction = (self.Team == "enemy") and "left" or "right"
-		nextX, nextY = self:GetNextPosition(direction)
+		local pathNextX, pathNextY = NavigationSystem.GetPathFallbackPosition(self, entities)
+		if pathNextX and pathNextY then
+			nextX, nextY = pathNextX, pathNextY
+		else
+			local direction = (self.Team == "enemy") and "left" or "right"
+			nextX, nextY = self:GetNextPosition(direction)
+		end
 	end
 
 	if entities:WillUnitCollide(self, nextX, nextY) then

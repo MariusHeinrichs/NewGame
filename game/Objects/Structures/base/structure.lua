@@ -20,6 +20,7 @@ local DEFAULTS = {
 ---@field IncomeBonusMetal number
 ---@field IsStructure boolean
 ---@field Team "player" | "enemy"
+---@field PathId string | nil
 ---@field CurrentTarget Unit | Structure | nil
 ---@field RetaliationTarget Unit | Structure | nil
 local Structure = {}
@@ -50,6 +51,7 @@ function Structure:new(Name, Health, Armor, Size, Costs, IncomeBonusGold, Income
 	newStructure.IncomeBonusMetal = IncomeBonusMetal or DEFAULTS.IncomeBonusMetal
 	newStructure.IsStructure = true
 	newStructure.Team = Team or "player"
+	newStructure.PathId = nil
 	newStructure.CurrentTarget = nil
 	newStructure.RetaliationTarget = nil
 	return newStructure

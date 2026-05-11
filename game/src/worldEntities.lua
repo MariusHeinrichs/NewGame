@@ -6,6 +6,9 @@ local DEFAULT_MAX_UNITS_PER_TEAM = 60
 ---@field Units table
 ---@field Structures table
 ---@field Projectiles table
+---@field Boundaries table
+---@field Map table | nil
+---@field WorldBounds { Width: number, Height: number } | nil
 ---@field CellSize number
 ---@field SpatialCells table | nil
 ---@field MaxEntityRadius number
@@ -19,11 +22,36 @@ function WorldEntities:new()
 		Units = {},
 		Structures = {},
 		Projectiles = {},
+		Boundaries = {},
+		Map = nil,
+		WorldBounds = nil,
 		CellSize = DEFAULT_CELL_SIZE,
 		SpatialCells = nil,
 		MaxEntityRadius = 0,
 		MaxUnitsPerTeam = DEFAULT_MAX_UNITS_PER_TEAM,
 	}, self)
+end
+
+---@param map table | nil
+function WorldEntities:SetMap(map)
+	self.Map = map
+	self.Boundaries = {}
+	self.WorldBounds = nil
+
+	if not map then
+		return
+	end
+
+	if type(map["GetBoundaries"]) == "function" then
+		self.Boundaries = map:GetBoundaries() or {}
+	end
+
+	if type(map["GetDimensions"]) == "function" then
+		local width, height = map:GetDimensions()
+		if width and height then
+			self.WorldBounds = { Width = width, Height = height }
+		end
+	end
 end
 
 ---@param unit table
@@ -39,6 +67,92 @@ end
 ---@param projectile table
 function WorldEntities:AddProjectile(projectile)
 	table.insert(self.Projectiles, projectile)
+end
+
+---@return number, number
+function WorldEntities:GetWorldDimensions()
+	if self.WorldBounds then
+		return self.WorldBounds.Width, self.WorldBounds.Height
+	end
+	return love.graphics.getDimensions()
+end
+
+---@param boundary table | nil
+---@param x number
+---@param y number
+---@param radius number
+---@return boolean
+local function boundaryIntersectsCircle(boundary, x, y, radius)
+	if not boundary or boundary.BlocksMovement == false then
+		return false
+	end
+
+	local shape = boundary.Shape
+	if not shape then
+		return false
+	end
+
+	if shape.Type == "rect" then
+		return Collisions.CircleIntersectsRect(x, y, radius, shape.X, shape.Y, shape.Width, shape.Height)
+	end
+
+	if shape.Type == "circle" then
+		return Collisions.CirclesOverlap(x, y, radius, shape.X, shape.Y, shape.Radius)
+	end
+
+	return false
+end
+
+---@param boundary table | nil
+---@param x number
+---@param y number
+---@param w number
+---@param h number
+---@return boolean
+local function boundaryIntersectsRect(boundary, x, y, w, h)
+	if not boundary or boundary.BlocksPlacement == false then
+		return false
+	end
+
+	local shape = boundary.Shape
+	if not shape then
+		return false
+	end
+
+	if shape.Type == "rect" then
+		return Collisions.RectsOverlap(x, y, w, h, shape.X, shape.Y, shape.Width, shape.Height)
+	end
+
+	if shape.Type == "circle" then
+		local closestX = math.max(x, math.min(shape.X, x + w))
+		local closestY = math.max(y, math.min(shape.Y, y + h))
+		local dx = shape.X - closestX
+		local dy = shape.Y - closestY
+		return (dx * dx + dy * dy) < (shape.Radius * shape.Radius)
+	end
+
+	return false
+end
+
+---@param x number
+---@param y number
+---@param radius number
+---@return boolean
+function WorldEntities:CanSpawnUnitAt(x, y, radius)
+	local unitRadius = radius or 0
+	local width, height = self:GetWorldDimensions()
+
+	if x - unitRadius < 0 or y - unitRadius < 0 or x + unitRadius > width or y + unitRadius > height then
+		return false
+	end
+
+	for _, boundary in ipairs(self.Boundaries) do
+		if boundaryIntersectsCircle(boundary, x, y, unitRadius) then
+			return false
+		end
+	end
+
+	return true
 end
 
 ---@param cellX number
@@ -139,7 +253,7 @@ function WorldEntities:TrySpawnUnitFromStructure(structure, dt)
 		return false
 	end
 
-	local spawnedUnit = structure:SpawnUnit(dt)
+	local spawnedUnit = structure:SpawnUnit(dt, self)
 	if not spawnedUnit then
 		return false
 	end
@@ -251,10 +365,18 @@ end
 ---@param nextY number
 ---@return boolean
 function WorldEntities:WillUnitCollide(movingUnit, nextX, nextY)
-	for _, structure in ipairs(self.Structures) do
-		local rx, ry, rw, rh = Collisions.GetRectBounds(structure.Position.X, structure.Position.Y, structure.Size)
-		if Collisions.CircleIntersectsRect(nextX, nextY, movingUnit.Size, rx, ry, rw, rh) then
+	for _, boundary in ipairs(self.Boundaries) do
+		if boundaryIntersectsCircle(boundary, nextX, nextY, movingUnit.Size) then
 			return true
+		end
+	end
+
+	for _, structure in ipairs(self.Structures) do
+		if structure.Team ~= movingUnit.Team then
+			local rx, ry, rw, rh = Collisions.GetRectBounds(structure.Position.X, structure.Position.Y, structure.Size)
+			if Collisions.CircleIntersectsRect(nextX, nextY, movingUnit.Size, rx, ry, rw, rh) then
+				return true
+			end
 		end
 	end
 
@@ -275,10 +397,16 @@ end
 ---@return string | nil
 function WorldEntities:CanPlaceStructureAt(x, y, size)
 	local targetX, targetY, targetW, targetH = Collisions.GetRectBounds(x, y, size)
-	local width, height = love.graphics.getDimensions()
+	local width, height = self:GetWorldDimensions()
 
 	if targetX < 0 or targetY < 0 or targetX + targetW > width or targetY + targetH > height then
 		return false, "out_of_bounds"
+	end
+
+	for _, boundary in ipairs(self.Boundaries) do
+		if boundaryIntersectsRect(boundary, targetX, targetY, targetW, targetH) then
+			return false, "blocked_by_boundary"
+		end
 	end
 
 	for _, structure in ipairs(self.Structures) do
