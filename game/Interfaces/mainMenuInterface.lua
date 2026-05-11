@@ -8,7 +8,7 @@ local BASE_BUTTON_HEIGHT = 50
 local BASE_SPACING_Y = 60
 
 local function onStartGamePressed()
-	GameStateTransitions.EnterRunning()
+	GameStateTransitions.EnterNewGame()
 end
 
 --- @class MainMenuInterface

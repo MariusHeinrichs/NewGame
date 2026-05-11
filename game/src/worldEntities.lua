@@ -159,6 +159,12 @@ function WorldEntities:CanSpawnUnitAt(x, y, radius)
 		end
 	end
 
+	for _, unit in ipairs(self.Units) do
+		if Collisions.CirclesOverlap(x, y, unitRadius, unit.Position.X, unit.Position.Y, unit.Size) then
+			return false
+		end
+	end
+
 	return true
 end
 

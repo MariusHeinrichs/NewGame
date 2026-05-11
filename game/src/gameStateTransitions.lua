@@ -22,10 +22,18 @@ function GameStateTransitions.EnterMenu()
 	GameContext.GameState.Mode = GameStateModes.MENU
 end
 
+--- Starts a completely fresh match and enters running mode.
+---@param startResources {Gold: number, Metal: number, Aether: number} | nil
+function GameStateTransitions.EnterNewGame(startResources)
+	GameStateTransitions.ResetForNewMatch(startResources or { Gold = 999, Metal = 999, Aether = 999 })
+	GameContext.GameState.Mode = GameStateModes.RUNNING
+end
+
 --- Enters running mode.
 function GameStateTransitions.EnterRunning()
 	if not GameContext.Runtime.World or not GameContext.Runtime.Resources or not GameContext.Interfaces.Battle then
-		GameStateTransitions.ResetForNewMatch({Gold = 999, Metal = 999, Aether = 999})
+		GameStateTransitions.EnterNewGame({ Gold = 999, Metal = 999, Aether = 999 })
+		return
 	end
 	GameContext.GameState.Mode = GameStateModes.RUNNING
 end
