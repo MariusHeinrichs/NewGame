@@ -125,6 +125,7 @@ function World:Update(dt)
 	local playerTownHall = self.Entities:GetEnemyTownHall("enemy")
 	local enemyTownHall = self.Entities:GetEnemyTownHall("player")
 	if not playerTownHall or not enemyTownHall then
+		GameContext.GameState.Won = enemyTownHall == nil
 		GameContext.GameState.Mode = GameStateModes.GAME_OVER
 	end
 end

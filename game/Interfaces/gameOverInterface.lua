@@ -1,7 +1,9 @@
 --- MainMenuButtons module
 
 local Button = require("BaseClasses.button")
+local Text = require("BaseClasses.text")
 local GameStateTransitions = require("src.gameStateTransitions")
+local GameContext = require("src.gameContext")
 
 local BASE_BUTTON_WIDTH = 200
 local BASE_BUTTON_HEIGHT = 50
@@ -12,6 +14,7 @@ local BASE_SPACING_Y = 60
 --- @field ReStartButton Button
 --- @field MenuButton Button
 --- @field QuitButton Button
+--- @field PostGameMessage Text
 local GameOverInterface = {}
 GameOverInterface.__index = GameOverInterface
 
@@ -21,9 +24,25 @@ function GameOverInterface:new()
 	local newButtons = setmetatable({}, self)
 
 	local definitions = {
-		{ key = "ReStartButton", name = "ReStart", text = "Restart Game", action = function() GameStateTransitions.EnterNewGame() end },
-		{ key = "MenuButton",    name = "Menu",    text = "Main Menu",   action = function() GameStateTransitions.EnterMenu() end },
-		{ key = "QuitButton",    name = "Quit",    text = "Quit Game",   action = function() love.event.quit() end },
+		{
+			key = "ReStartButton",
+			name = "ReStart",
+			text = "Restart Game",
+			action = function()
+				GameStateTransitions
+					.EnterNewGame()
+			end
+		},
+		{
+			key = "MenuButton",
+			name = "Menu",
+			text = "Main Menu",
+			action = function()
+				GameStateTransitions
+					.EnterMenu()
+			end
+		},
+		{ key = "QuitButton", name = "Quit", text = "Quit Game", action = function() love.event.quit() end },
 	}
 
 	for index, definition in ipairs(definitions) do
@@ -36,6 +55,9 @@ function GameOverInterface:new()
 			{ X = 0, Y = 0 },
 			{ X = 0, Y = 15 }
 		)
+
+		newButtons.PostGameMessage = Text:new(GameContext.GameState.Won and "You Won!" or "You Lost!", { X = 0, Y = 0 },
+		0, "center", { 1, 1, 1, 1 })
 	end
 
 	newButtons:RebuildLayout()
@@ -77,6 +99,10 @@ function GameOverInterface:RebuildLayout()
 
 	self.QuitButton.PositionButton.X = centerX
 	self.QuitButton.PositionButton.Y = startY + (2 * spacingY)
+
+	self.PostGameMessage.Position.X = 0
+	self.PostGameMessage.Position.Y = height / 2 - 56
+	self.PostGameMessage.Width = width
 end
 
 --- Draws all the Game Over buttons
@@ -84,6 +110,8 @@ function GameOverInterface:Draw()
 	self.ReStartButton:Draw()
 	self.MenuButton:Draw()
 	self.QuitButton:Draw()
+	self.PostGameMessage.Content = GameContext.GameState.Won and "You Won!" or "You Lost!"
+	self.PostGameMessage:Draw()
 end
 
 --- Checks if any of the buttons are pressed based on the mouse position and cursor radius.
@@ -115,6 +143,5 @@ function GameOverInterface:HandleMousePressed(x, y, button)
 	end
 	return self:IsPressed({ X = x, Y = y }, 0)
 end
-
 
 return GameOverInterface

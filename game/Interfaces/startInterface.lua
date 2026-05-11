@@ -12,7 +12,7 @@ StartInterface.__index = StartInterface
 ---@return StartInterface
 function StartInterface:new()
 	local startInterface = setmetatable({}, self)
-	startInterface.TitleText = Text:new("NewGame", { X = 0, Y = 0 }, 0, "center", { 1, 1, 1, 1 })
+	startInterface.TitleText = Text:new("Castle Fight", { X = 0, Y = 0 }, 0, "center", { 1, 1, 1, 1 })
 	startInterface.PromptText = Text:new("Press enter to start the game.", { X = 0, Y = 0 }, 0, "center", { 1, 1, 1, 1 })
 	startInterface:RebuildLayout()
 	return startInterface

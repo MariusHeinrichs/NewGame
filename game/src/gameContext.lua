@@ -3,6 +3,7 @@ local GameStateModes = require("src.gameStateModes")
 local GameContext = {
 	GameState = {
 		Mode = GameStateModes.START,
+		Won = false,
 	},
 	Runtime = {
 		World = nil,

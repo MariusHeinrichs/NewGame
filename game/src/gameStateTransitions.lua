@@ -26,6 +26,7 @@ end
 ---@param startResources {Gold: number, Metal: number, Aether: number} | nil
 function GameStateTransitions.EnterNewGame(startResources)
 	GameStateTransitions.ResetForNewMatch(startResources or { Gold = 999, Metal = 999, Aether = 999 })
+	GameContext.GameState.Won = false
 	GameContext.GameState.Mode = GameStateModes.RUNNING
 end
 
