@@ -20,7 +20,8 @@ function Knight:new(name)
 		12,   -- Size
 		30,   -- AttackRange
 		120,  -- AggroRange
-		0.8   -- AttackSpeed
+		0.8,   -- AttackSpeed
+		"unit" -- PreferedTarget
 	)
 end
 

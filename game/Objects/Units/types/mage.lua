@@ -20,7 +20,8 @@ function Mage:new(name)
 		9,    -- Size
 		100,  -- AttackRange
 		200,  -- AggroRange
-		0.6   -- AttackSpeed
+		0.6,   -- AttackSpeed
+		"unit" -- PreferedTarget
 	)
 	instance.ProjectileSpeed = 190
 	instance.ProjectileRadius = 3.5

@@ -26,6 +26,7 @@ local DEFAULTS = {
 ---@field AttackRange number
 ---@field AggroRange number
 ---@field AttackSpeed number
+---@field PreferedTarget "unit" | "structure"
 ---@field Team "player" | "enemy"
 ---@field PathId string | nil
 ---@field PathWaypointIndex number | nil
@@ -49,9 +50,10 @@ setmetatable(Unit, { __index = Object })
 ---@param AttackRange number | nil
 ---@param AggroRange number | nil
 ---@param AttackSpeed number | nil
+---@param PreferedTarget "unit" | "structure" | nil
 ---@param Team "player" | "enemy" | nil
 ---@return T
-function Unit:new(Name, Health, Damage, Armor, Speed, Size, AttackRange, AggroRange, AttackSpeed, Team)
+function Unit:new(Name, Health, Damage, Armor, Speed, Size, AttackRange, AggroRange, AttackSpeed, PreferedTarget, Team)
 	local newUnit = Object.new(self, Name)
 	newUnit.Health = Health or DEFAULTS.Health
 	newUnit.MaxHealth = newUnit.Health
@@ -62,6 +64,7 @@ function Unit:new(Name, Health, Damage, Armor, Speed, Size, AttackRange, AggroRa
 	newUnit.AttackRange = AttackRange or DEFAULTS.AttackRange
 	newUnit.AggroRange = AggroRange or DEFAULTS.AggroRange
 	newUnit.AttackSpeed = AttackSpeed or DEFAULTS.AttackSpeed
+	newUnit.PreferedTarget = PreferedTarget or "unit"
 	newUnit.Team = Team or "player"
 	newUnit.PathId = nil
 	newUnit.PathWaypointIndex = nil
@@ -174,21 +177,14 @@ function Unit:SearchForEnemyToAttack(entities)
 	end)
 end
 
---- Returns the enemy TownHall if one exists.
----@param entities WorldEntities
----@return Structure | nil
-function Unit:GetEnemyTownHall(entities)
-	return entities:GetEnemyTownHall(self.Team)
-end
-
 --- Returns true when a target can be kept as the current target.
 ---@param target Unit | Structure | nil
 ---@return boolean
-function Unit:CanKeepCurrentTarget(target)
-	return TargetingSystem.CanKeepTarget(self, target, {
-		range = self.AggroRange,
-		allowTownHall = true,
-	})
+function Unit:CanKeepCurrentTarget(target, entities)
+       return TargetingSystem.CanKeepTarget(self, target, {
+	       range = self.AggroRange,
+	       allowTownHall = true
+       }, entities)
 end
 
 --- Refreshes and returns the unit's current target.
@@ -196,7 +192,9 @@ end
 ---@return Unit | Structure | nil
 function Unit:RefreshTarget(entities)
 	return TargetingSystem.RefreshTarget(self, entities, {
-		canKeepCurrentTarget = Unit.CanKeepCurrentTarget,
+		canKeepCurrentTarget = function(unit, target)
+			 return unit:CanKeepCurrentTarget(target, entities)
+		end,
 		searchForEnemy = Unit.SearchForEnemy,
 		canKeepRetaliationTarget = Unit.CanKeepRetaliationTarget,
 		clearRetaliationWhenInvalid = true,

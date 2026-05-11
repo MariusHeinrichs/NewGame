@@ -13,14 +13,15 @@ setmetatable(Archer, { __index = RangedUnit })
 ---@return Archer
 function Archer:new(name)
 	local instance = RangedUnit.new(self, name,
-		80,   -- Health
-		18,   -- Damage
-		3,    -- Armor
-		2.0,  -- Speed
-		8,    -- Size
-		120,  -- AttackRange
-		220,  -- AggroRange
-		1.5   -- AttackSpeed
+		80, -- Health
+		18, -- Damage
+		3, -- Armor
+		2.0, -- Speed
+		8, -- Size
+		120, -- AttackRange
+		220, -- AggroRange
+		1.5, -- AttackSpeed
+		"unit" -- PreferedTarget
 	)
 	instance.ProjectileSpeed = 320
 	instance.ProjectileRadius = 2.5

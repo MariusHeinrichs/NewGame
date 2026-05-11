@@ -20,7 +20,8 @@ function Barbarian:new(name)
 		10,   -- Size
 		40,   -- AttackRange
 		130,  -- AggroRange
-		1.0   -- AttackSpeed
+		1.0,   -- AttackSpeed
+		"unit" -- PreferedTarget
 	)
 end
 

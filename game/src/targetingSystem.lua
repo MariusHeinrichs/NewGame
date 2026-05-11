@@ -57,17 +57,33 @@ end
 ---@param target Unit | Structure | nil
 ---@param options { range: number | nil, allowTownHall: boolean | nil }
 ---@return boolean
-function TargetingSystem.CanKeepTarget(source, target, options)
-	if not target then
-		return false
-	end
-	if not TargetingSystem.IsTargetAlive(target) or not TargetingSystem.IsTargetEnemy(source, target) then
-		return false
-	end
-	if options.allowTownHall and target.Name == "TownHall" then
-		return true
-	end
-	return TargetingSystem.IsTargetWithinRange(source, target, options.range or 0)
+function TargetingSystem.CanKeepTarget(source, target, options, entities)
+       if not target then
+	       return false
+       end
+       if not TargetingSystem.IsTargetAlive(target) or not TargetingSystem.IsTargetEnemy(source, target) then
+	       return false
+       end
+       if options.allowTownHall and target.Name == "TownHall" then
+	       return true
+       end
+       -- Bevorzugte Target-Logik: Wenn das aktuelle Target nicht dem bevorzugten Typ entspricht und ein besseres Ziel in Reichweite ist, wechsle
+       if source.PreferedTarget == "unit" and target.IsStructure == true and entities then
+	       local preferred = TargetingSystem.SearchForEnemy(source, entities, function(t)
+		       return TargetingSystem.IsTargetWithinRange(source, t, options.range or 0) and (t.IsStructure ~= true)
+	       end)
+	       if preferred then
+		       return false
+	       end
+       elseif source.PreferedTarget == "structure" and not (target.IsStructure == true) and entities then
+	       local preferred = TargetingSystem.SearchForEnemy(source, entities, function(t)
+		       return TargetingSystem.IsTargetWithinRange(source, t, options.range or 0) and (t.IsStructure == true)
+	       end)
+	       if preferred then
+		       return false
+	       end
+       end
+       return TargetingSystem.IsTargetWithinRange(source, target, options.range or 0)
 end
 
 ---@param source Unit | Structure
@@ -93,7 +109,6 @@ end
 ---@field canKeepRetaliationTarget fun(self: Unit | Structure, target: Unit | Structure | nil): boolean | nil
 ---@field clearRetaliationWhenInvalid boolean | nil
 ---@field preferRetaliation boolean | nil
-
 ---@param source Unit | Structure
 ---@param entities WorldEntities
 ---@param options TargetRefreshOptions
