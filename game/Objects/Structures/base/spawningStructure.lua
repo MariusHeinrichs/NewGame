@@ -1,38 +1,12 @@
 --- SpawningStructure class for structures that periodically spawn units.
 
 local Structure = require("Objects.Structures.base.structure")
+local MathUtils = require("src.mathUtils")
 
 local DEFAULTS = {
 	SpawnRate = 5,
 	SpawnTimer = 0,
 }
-
---- Normalizes a vector.
----@param x number
----@param y number
----@return number, number
-local function normalizeVector(x, y)
-	local len = math.sqrt(x * x + y * y)
-	if len <= 0 then
-		return 0, 0
-	end
-	return x / len, y / len
-end
-
---- Clamps a value between a minimum and maximum.
----@param value number
----@param minValue number
----@param maxValue number
----@return number
-local function clamp(value, minValue, maxValue)
-	if value < minValue then
-		return minValue
-	end
-	if value > maxValue then
-		return maxValue
-	end
-	return value
-end
 
 --- Resolves the forward direction for the spawning structure.
 ---@param entities WorldEntities | nil
@@ -72,11 +46,11 @@ local function resolveForwardDirection(entities, structure)
 		return fallbackX, fallbackY
 	end
 
-	nearestIndex = clamp(nearestIndex, 1, #waypoints)
+	nearestIndex = MathUtils.Clamp(nearestIndex, 1, #waypoints)
 	local preferredStep = (structure.Team == "enemy") and -1 or 1
-	local targetIndex = clamp(nearestIndex + preferredStep, 1, #waypoints)
+	local targetIndex = MathUtils.Clamp(nearestIndex + preferredStep, 1, #waypoints)
 	if targetIndex == nearestIndex then
-		targetIndex = clamp(nearestIndex - preferredStep, 1, #waypoints)
+		targetIndex = MathUtils.Clamp(nearestIndex - preferredStep, 1, #waypoints)
 	end
 
 	local targetWaypoint = path:GetWaypoint(targetIndex)
@@ -89,7 +63,7 @@ local function resolveForwardDirection(entities, structure)
 
 	local directionX = targetWaypoint.X - structure.Position.X
 	local directionY = targetWaypoint.Y - structure.Position.Y
-	local normalizedX, normalizedY = normalizeVector(directionX, directionY)
+	local normalizedX, normalizedY = MathUtils.Normalize(directionX, directionY)
 	if normalizedX == 0 and normalizedY == 0 then
 		return fallbackX, fallbackY
 	end

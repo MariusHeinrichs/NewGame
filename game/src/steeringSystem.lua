@@ -1,6 +1,7 @@
 --- Steering-based movement helper for units.
 
 local Collisions = require("src.collisions")
+local MathUtils = require("src.mathUtils")
 
 local SteeringSystem = {}
 
@@ -17,33 +18,6 @@ local PADDING = {
 	WorldEdgeAvoid = 18,
 }
 
---- Description of function normalize.
----@param x number
----@param y number
----@return number, number
-local function normalize(x, y)
-	local len = math.sqrt(x * x + y * y)
-	if len <= 0 then
-		return 0, 0
-	end
-	return x / len, y / len
-end
-
---- Description of function clamp.
----@param value number
----@param minValue number
----@param maxValue number
----@return number
-local function clamp(value, minValue, maxValue)
-	if value < minValue then
-		return minValue
-	end
-	if value > maxValue then
-		return maxValue
-	end
-	return value
-end
-
 --- Description of function getRectRepulsion.
 ---@param x number
 ---@param y number
@@ -53,8 +27,8 @@ end
 ---@param rh number
 ---@return number, number, number
 local function getRectRepulsion(x, y, rx, ry, rw, rh)
-	local closestX = clamp(x, rx, rx + rw)
-	local closestY = clamp(y, ry, ry + rh)
+	local closestX = MathUtils.Clamp(x, rx, rx + rw)
+	local closestY = MathUtils.Clamp(y, ry, ry + rh)
 	local dx = x - closestX
 	local dy = y - closestY
 	local distSq = dx * dx + dy * dy
@@ -78,7 +52,7 @@ local function getDesiredDirection(unit, targetX, targetY)
 	if not targetX or not targetY then
 		return 0, 0
 	end
-	return normalize(targetX - unit.Position.X, targetY - unit.Position.Y)
+	return MathUtils.Normalize(targetX - unit.Position.X, targetY - unit.Position.Y)
 end
 
 --- Description of function getSeparationForce.
@@ -228,7 +202,7 @@ function SteeringSystem.GetNextPosition(unit, entities, targetX, targetY)
 		(separationY * WEIGHTS.Separation) +
 		(obstacleY * WEIGHTS.Obstacle)
 
-	local moveDirX, moveDirY = normalize(steerX, steerY)
+	local moveDirX, moveDirY = MathUtils.Normalize(steerX, steerY)
 	if moveDirX == 0 and moveDirY == 0 then
 		moveDirX, moveDirY = desiredX, desiredY
 	end

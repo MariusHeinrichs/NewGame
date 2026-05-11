@@ -1,0 +1,3863 @@
+﻿=== FILE: c:\Repositories\NewGame\game\main.lua ===
+local MainMenuInterface = require("Interfaces.mainMenuInterface")
+local PauseInterface = require("Interfaces.pauseInterface")
+local StartInterface = require("Interfaces.startInterface")
+local CombatOverlayInterface = require("Interfaces.combatOverlayInterface")
+local MatchSetup = require("Systems.matchSetup")
+local GameStateModes = require("src.gameStateModes")
+local GameContext = require("src.gameContext")
+local GameInputRouter = require("src.gameInputRouter")
+
+local gameState = GameContext.GameState
+---@type { World: World | nil, Resources: Resources | nil, HasInitializedMatch: boolean, EnemyBuilderAI: { Update: fun(self: table, dt: number): nil } | nil }
+local runtime = GameContext.Runtime
+---@type { Battle: BattleInterface | nil, CombatOverlay: CombatOverlayInterface | nil, MainMenu: MainMenuInterface | nil, Pause: PauseInterface | nil, Start: StartInterface | nil }
+local interfaces = GameContext.Interfaces
+
+function love.load()
+	love.graphics.setColor(1, 1, 1)
+	interfaces.Start = StartInterface:new()
+	interfaces.MainMenu = MainMenuInterface:new()
+	interfaces.Pause = PauseInterface:new()
+	interfaces.CombatOverlay = CombatOverlayInterface:new()
+	GameInputRouter.InitializeHandlers()
+end
+
+function love.update(dt)
+	if gameState.Mode == GameStateModes.RUNNING then
+		if not runtime.World or not runtime.Resources or not interfaces.Battle then
+			return
+		end
+
+		if not runtime.HasInitializedMatch then
+			MatchSetup.InitializeDefault(runtime.World)
+			runtime.HasInitializedMatch = true
+		end
+		runtime.Resources:Update(dt)
+		interfaces.Battle:Update(dt)
+		if runtime.EnemyBuilderAI then
+			runtime.EnemyBuilderAI:Update(dt)
+		end
+		runtime.World:Update(dt)
+	end
+end
+
+function love.draw()
+	love.graphics.printf("FPS: " .. love.timer.getFPS(), 10, 10, 200, "left")
+
+	if gameState.Mode == GameStateModes.START then
+		if interfaces.Start then
+			interfaces.Start:Draw()
+		end
+	end
+
+	if gameState.Mode == GameStateModes.MENU then
+		interfaces.MainMenu:Draw()
+	end
+
+	if gameState.Mode == GameStateModes.RUNNING then
+		if runtime.World and interfaces.Battle then
+			runtime.World:Draw()
+			if interfaces.CombatOverlay then
+				interfaces.CombatOverlay:Draw(runtime.World)
+			end
+			interfaces.Battle:Draw()
+		end
+	end
+
+	if gameState.Mode == GameStateModes.PAUSE then
+		if runtime.World and interfaces.Battle then
+			runtime.World:Draw()
+			if interfaces.CombatOverlay then
+				interfaces.CombatOverlay:Draw(runtime.World)
+			end
+			interfaces.Battle:Draw()
+		end
+		interfaces.Pause:Draw()
+	end
+end
+
+function love.resize(w, h)
+	if runtime.World and type(runtime.World.HandleResize) == "function" then
+		runtime.World:HandleResize(w, h)
+	end
+
+	if interfaces.Start then
+		interfaces.Start:RebuildLayout()
+	end
+	if interfaces.MainMenu then
+		interfaces.MainMenu:RebuildLayout()
+	end
+	if interfaces.Battle then
+		interfaces.Battle:RebuildLayout()
+	end
+	if interfaces.Pause then
+		interfaces.Pause:RebuildLayout()
+	end
+end
+
+
+=== FILE: c:\Repositories\NewGame\game\world.lua ===
+--- World module â€” manages all active game entities.
+
+local StructurePlacement = require("Objects.Structures.placement.structurePlacement")
+local StructureRegistry = require("Objects.Structures.registry.structureRegistry")
+local WorldEntities = require("src.worldEntities")
+
+---@class World
+---@field Entities WorldEntities
+---@field Map table | nil
+---@field ShowMapDebug boolean
+local World = {}
+World.__index = World
+
+--- Description of function drawPathDebug.
+---@param path table | nil
+local function drawPathDebug(path)
+	if not path or type(path.GetWaypoints) ~= "function" then
+		return
+	end
+
+	local waypoints = path:GetWaypoints()
+	if not waypoints or #waypoints == 0 then
+		return
+	end
+
+	if path.Team == "enemy" then
+		love.graphics.setColor(0.95, 0.35, 0.35, 0.8)
+	else
+		love.graphics.setColor(0.2, 0.85, 0.35, 0.8)
+	end
+
+	for i = 1, #waypoints - 1 do
+		local startPoint = waypoints[i]
+		local endPoint = waypoints[i + 1]
+		love.graphics.line(startPoint.X, startPoint.Y, endPoint.X, endPoint.Y)
+	end
+
+	for _, point in ipairs(waypoints) do
+		love.graphics.circle("fill", point.X, point.Y, 3)
+	end
+end
+
+--- Description of function drawBoundaryDebug.
+---@param boundary table | nil
+local function drawBoundaryDebug(boundary)
+	if not boundary or not boundary.Shape then
+		return
+	end
+
+	if boundary.BlocksMovement == false and boundary.BlocksPlacement == false then
+		love.graphics.setColor(0.6, 0.6, 0.6, 0.35)
+	elseif boundary.BlocksMovement and boundary.BlocksPlacement then
+		love.graphics.setColor(0.95, 0.75, 0.2, 0.4)
+	elseif boundary.BlocksMovement then
+		love.graphics.setColor(0.95, 0.45, 0.2, 0.4)
+	else
+		love.graphics.setColor(0.35, 0.75, 0.95, 0.4)
+	end
+
+	if boundary.Shape.Type == "rect" then
+		love.graphics.rectangle("fill", boundary.Shape.X, boundary.Shape.Y, boundary.Shape.Width, boundary.Shape.Height)
+		love.graphics.setColor(1, 1, 1, 0.7)
+		love.graphics.rectangle("line", boundary.Shape.X, boundary.Shape.Y, boundary.Shape.Width, boundary.Shape.Height)
+		return
+	end
+
+	if boundary.Shape.Type == "circle" then
+		love.graphics.circle("fill", boundary.Shape.X, boundary.Shape.Y, boundary.Shape.Radius)
+		love.graphics.setColor(1, 1, 1, 0.7)
+		love.graphics.circle("line", boundary.Shape.X, boundary.Shape.Y, boundary.Shape.Radius)
+	end
+end
+
+--- Description of function drawMapDebug.
+---@param map table | nil
+local function drawMapDebug(map)
+	if not map then
+		return
+	end
+
+	if map.Paths then
+		for _, path in ipairs(map.Paths) do
+			drawPathDebug(path)
+		end
+	end
+
+	if map.Boundaries then
+		for _, boundary in ipairs(map.Boundaries) do
+			drawBoundaryDebug(boundary)
+		end
+	end
+
+	love.graphics.setColor(1, 1, 1, 1)
+end
+
+--- Description of function assignStructurePath.
+---@param self World
+---@param structure table | nil
+local function assignStructurePath(self, structure)
+	if not structure or not structure.Position or not self.Map then
+		return
+	end
+
+	if structure.PathId and type(self.Map["GetPathById"]) == "function" and self.Map:GetPathById(structure.PathId) then
+		return
+	end
+
+	if type(self.Map["GetClosestPathForTeam"]) ~= "function" then
+		return
+	end
+
+	local closestPath = self.Map:GetClosestPathForTeam(structure.Position.X, structure.Position.Y, structure.Team)
+	if closestPath and closestPath.Id then
+		structure.PathId = closestPath.Id
+	end
+end
+
+--- Description of function translateEntityPosition.
+---@param entity table | nil
+---@param deltaX number
+---@param deltaY number
+local function translateEntityPosition(entity, deltaX, deltaY)
+	if not entity or not entity.Position then
+		return
+	end
+	entity.Position.X = entity.Position.X + deltaX
+	entity.Position.Y = entity.Position.Y + deltaY
+end
+
+--- Description of function translateWorldEntities.
+---@param entities WorldEntities
+---@param deltaX number
+---@param deltaY number
+local function translateWorldEntities(entities, deltaX, deltaY)
+	if deltaX == 0 and deltaY == 0 then
+		return
+	end
+
+	for _, unit in ipairs(entities:GetUnits()) do
+		translateEntityPosition(unit, deltaX, deltaY)
+	end
+	for _, structure in ipairs(entities:GetStructures()) do
+		translateEntityPosition(structure, deltaX, deltaY)
+	end
+	for _, projectile in ipairs(entities:GetProjectiles()) do
+		translateEntityPosition(projectile, deltaX, deltaY)
+	end
+	entities:RebuildSpatialIndex()
+end
+
+--- Description of function runMovementPhase.
+---@param entities WorldEntities
+---@param units table
+local function runMovementPhase(entities, units)
+	entities:RebuildSpatialIndex()
+
+	for _, unit in ipairs(units) do
+		local nextX, nextY = unit:CalculateNextPosition(entities)
+		unit:MoveTo(nextX, nextY)
+	end
+
+	entities:RemoveDeadUnits()
+	entities:RebuildSpatialIndex()
+end
+
+--- Description of function runCombatPhase.
+---@param entities WorldEntities
+---@param units table
+---@param structures table
+---@param dt number
+local function runCombatPhase(entities, units, structures, dt)
+	for _, unit in ipairs(units) do
+		unit:UpdateCombat(dt, entities)
+	end
+	for _, structure in ipairs(structures) do
+		structure:UpdateCombat(dt, entities)
+	end
+end
+
+--- Description of function runProjectileAndCleanupPhase.
+---@param entities WorldEntities
+---@param dt number
+local function runProjectileAndCleanupPhase(entities, dt)
+	entities:UpdateProjectiles(dt)
+	entities:RemoveDeadUnits()
+end
+
+--- Description of function runSpawnPhase.
+---@param entities WorldEntities
+---@param structures table
+---@param dt number
+local function runSpawnPhase(entities, structures, dt)
+	for _, structure in ipairs(structures) do
+		entities:TrySpawnUnitFromStructure(structure, dt)
+	end
+
+	entities:RemoveDeadStructures()
+end
+
+---@return World
+function World:new()
+	return setmetatable({
+		Entities = WorldEntities:new(),
+		Map = nil,
+		ShowMapDebug = false,
+	}, self)
+end
+
+--- Description of function World:SetMap.
+---@param map table | nil
+function World:SetMap(map)
+	if map and type(map.CenterInWindow) == "function" then
+		map:CenterInWindow(love.graphics.getDimensions())
+	end
+	self.Map = map
+	self.Entities:SetMap(map)
+end
+
+--- Description of function World:HandleResize.
+---@param width number
+---@param height number
+function World:HandleResize(width, height)
+	if not self.Map or type(self.Map.CenterInWindow) ~= "function" then
+		return
+	end
+
+	local deltaX, deltaY = self.Map:CenterInWindow(width, height)
+	translateWorldEntities(self.Entities, deltaX, deltaY)
+	self.Entities:SetMap(self.Map)
+end
+
+---@return boolean
+function World:ToggleMapDebug()
+	self.ShowMapDebug = not self.ShowMapDebug
+	return self.ShowMapDebug
+end
+
+--- Description of function World:AddStructure.
+---@param structure table
+function World:AddStructure(structure)
+	assignStructurePath(self, structure)
+	self.Entities:AddStructure(structure)
+end
+
+--- Places a structure of the given type at the given position, if a type is selected.
+---@param selectedStructureType string | nil
+---@param resources Resources
+---@param x number
+---@param y number
+---@param team "player" | "enemy"
+---@return boolean placed True when structure was successfully placed.
+---@return string | nil reason Failure reason code when placement fails.
+function World:PlaceStructure(selectedStructureType, resources, x, y, team)
+	local structureClass = StructureRegistry.GetByType(selectedStructureType)
+	local structure, reason = StructurePlacement.PlaceStructure(structureClass, resources, self.Entities, x, y, team)
+	if structure then
+		self:AddStructure(structure)
+		return true, nil
+	end
+	return false, reason
+end
+
+--- Updates all entities. Moves units, removes dead ones, spawns new ones from structures.
+---@param dt number
+function World:Update(dt)
+	local units = self.Entities:GetUnits()
+	local structures = self.Entities:GetStructures()
+
+	-- Phase 1: movement and pathing.
+	runMovementPhase(self.Entities, units)
+
+	-- Phase 2: direct combat resolution.
+	runCombatPhase(self.Entities, units, structures, dt)
+
+	-- Phase 3: projectile simulation and post-combat cleanup.
+	runProjectileAndCleanupPhase(self.Entities, dt)
+
+	-- Phase 4: structure-based spawns and structure cleanup.
+	runSpawnPhase(self.Entities, structures, dt)
+end
+
+--- Draws all entities.
+function World:Draw()
+	if self.ShowMapDebug then
+		drawMapDebug(self.Map)
+	end
+
+	for _, unit in ipairs(self.Entities:GetUnits()) do
+		unit:Draw()
+	end
+	for _, projectile in ipairs(self.Entities:GetProjectiles()) do
+		projectile:Draw()
+	end
+	for _, structure in ipairs(self.Entities:GetStructures()) do
+		structure:Draw()
+	end
+end
+
+return World
+
+
+=== FILE: c:\Repositories\NewGame\game\gameResources.lua ===
+--- Resources module â€” manages the player's currencies.
+
+local BASE_GOLD_INCOME_VALUE = 8
+local BASE_METAL_INCOME_VALUE = 4
+local BASE_AETHER_INCOME_VALUE = 0
+local INCOME_INTERVAL_SECONDS = 5
+
+---@class Resources
+---@field Gold number
+---@field Metal number
+---@field Aether number
+---@field BaseGoldIncomeValue number
+---@field BaseMetalIncomeValue number
+---@field BaseAetherIncomeValue number
+---@field IncomeInterval number
+---@field IncomeTimer number
+local Resources = {}
+Resources.__index = Resources
+
+--- Description of function Resources:new.
+---@param gold number | nil
+---@param metal number | nil
+---@param aether number | nil
+---@return Resources
+function Resources:new(gold, metal, aether)
+	return setmetatable({
+		Gold = gold or 0,
+		Metal = metal or 0,
+		Aether = aether or 0,
+		BaseGoldIncomeValue = BASE_GOLD_INCOME_VALUE,
+		BaseMetalIncomeValue = BASE_METAL_INCOME_VALUE,
+		BaseAetherIncomeValue = BASE_AETHER_INCOME_VALUE,
+		IncomeInterval = INCOME_INTERVAL_SECONDS,
+		IncomeTimer = 0,
+	}, self)
+end
+
+--- Adds periodic base income for Gold and Metal.
+---@param dt number
+function Resources:Update(dt)
+	self.IncomeTimer = self.IncomeTimer + dt
+
+	while self.IncomeTimer >= self.IncomeInterval do
+		self.IncomeTimer = self.IncomeTimer - self.IncomeInterval
+		self:AddGold(self.BaseGoldIncomeValue)
+		self:AddMetal(self.BaseMetalIncomeValue)
+	end
+end
+
+--- Description of function Resources:AddGold.
+---@param amount number
+function Resources:AddGold(amount)
+	self.Gold = self.Gold + amount
+end
+
+--- Description of function Resources:AddMetal.
+---@param amount number
+function Resources:AddMetal(amount)
+	self.Metal = self.Metal + amount
+end
+
+--- Description of function Resources:AddAether.
+---@param amount number
+function Resources:AddAether(amount)
+	self.Aether = self.Aether + amount
+end
+
+--- Increases periodic base income values for Gold and Metal.
+---@param goldBonus number | nil
+---@param metalBonus number | nil
+function Resources:AddIncomeBonus(goldBonus, metalBonus)
+	self.BaseGoldIncomeValue = self.BaseGoldIncomeValue + (goldBonus or 0)
+	self.BaseMetalIncomeValue = self.BaseMetalIncomeValue + (metalBonus or 0)
+end
+
+--- Returns true and deducts cost if the player can afford it, otherwise false.
+---@param costs table
+---@return boolean
+function Resources:Spend(costs)
+	costs = costs or {}
+
+	local gold = costs.Gold or 0
+	local metal = costs.Metal or 0
+	local aether = costs.Aether or 0
+
+	if self.Gold < gold or self.Metal < metal or self.Aether < aether then
+		return false
+	end
+
+	self.Gold = self.Gold - gold
+	self.Metal = self.Metal - metal
+	self.Aether = self.Aether - aether
+	return true
+end
+
+return Resources
+
+
+=== FILE: c:\Repositories\NewGame\game\src\gameContext.lua ===
+local GameStateModes = require("src.gameStateModes")
+
+local GameContext = {
+	GameState = {
+		Mode = GameStateModes.START,
+	},
+	Runtime = {
+		World = nil,
+		Resources = nil,
+		HasInitializedMatch = false,
+		EnemyBuilderAI = nil,
+	},
+	Interfaces = {
+		Battle = nil,
+		CombatOverlay = nil,
+		Start = nil,
+		MainMenu = nil,
+		Pause = nil,
+	},
+}
+
+return GameContext
+
+
+=== FILE: c:\Repositories\NewGame\game\src\gameStateTransitions.lua ===
+local GameStateModes = require("src.gameStateModes")
+local GameContext = require("src.gameContext")
+local MatchSetup = require("Systems.matchSetup")
+
+local GameStateTransitions = {}
+
+--- Resets runtime and battle interface for a fresh match.
+---@param startResources {Gold: number, Metal: number, Aether: number} | nil
+function GameStateTransitions.ResetForNewMatch(startResources)
+	local world, resources, battleInterface, hasInitializedMatch, enemyBuilderAI = MatchSetup.CreateDefaultRuntimeState(
+		startResources)
+
+	GameContext.Runtime.World = world
+	GameContext.Runtime.Resources = resources
+	GameContext.Runtime.HasInitializedMatch = hasInitializedMatch
+	GameContext.Runtime.EnemyBuilderAI = enemyBuilderAI
+	GameContext.Interfaces.Battle = battleInterface
+end
+
+--- Enters the main menu from the start screen.
+function GameStateTransitions.EnterMenu()
+	GameContext.GameState.Mode = GameStateModes.MENU
+end
+
+--- Starts a completely fresh match and enters running mode.
+---@param startResources {Gold: number, Metal: number, Aether: number} | nil
+function GameStateTransitions.EnterNewGame(startResources)
+	GameStateTransitions.ResetForNewMatch(startResources or { Gold = 999, Metal = 999, Aether = 999 })
+	GameContext.GameState.Mode = GameStateModes.RUNNING
+end
+
+--- Enters running mode.
+function GameStateTransitions.EnterRunning()
+	if not GameContext.Runtime.World or not GameContext.Runtime.Resources or not GameContext.Interfaces.Battle then
+		GameStateTransitions.EnterNewGame({ Gold = 999, Metal = 999, Aether = 999 })
+		return
+	end
+	GameContext.GameState.Mode = GameStateModes.RUNNING
+end
+
+--- Enters pause mode from running gameplay.
+function GameStateTransitions.EnterPause()
+	GameContext.GameState.Mode = GameStateModes.PAUSE
+end
+
+--- Enters the start screen from the main menu.
+function GameStateTransitions.EnterStart()
+	GameContext.GameState.Mode = GameStateModes.START
+end
+
+return GameStateTransitions
+
+
+=== FILE: c:\Repositories\NewGame\game\src\gameStateModes.lua ===
+--- Shared game state mode constants.
+
+local GameStateModes = {
+	START = "start",
+	MENU = "menu",
+	RUNNING = "running",
+	PAUSE = "pause",
+}
+
+return GameStateModes
+
+
+=== FILE: c:\Repositories\NewGame\game\src\gameInputRouter.lua ===
+local GameStateModes = require("src.gameStateModes")
+local GameStateTransitions = require("src.gameStateTransitions")
+local GameContext = require("src.gameContext")
+
+local GameInputRouter = {}
+
+--- Routes key presses based on the current game state.
+---@param key string
+---@return boolean handled
+function GameInputRouter.HandleKeyPressed(key)
+	local gameState = GameContext.GameState
+
+	if key == "escape" and gameState.Mode == GameStateModes.RUNNING then
+		GameStateTransitions.EnterPause()
+		return true
+	end
+
+	if key == "escape" and gameState.Mode == GameStateModes.PAUSE then
+		GameStateTransitions.EnterRunning()
+		return true
+	end
+
+	if key == "escape" and gameState.Mode == GameStateModes.START then
+		love.event.quit()
+		return true
+	end
+
+	if key == "escape" and gameState.Mode == GameStateModes.MENU then
+		GameStateTransitions.EnterStart()
+		return true
+	end
+
+	if key == "f3" and (gameState.Mode == GameStateModes.RUNNING or gameState.Mode == GameStateModes.PAUSE) then
+		local world = GameContext.Runtime.World
+		if world and type(world.ToggleMapDebug) == "function" then
+			world:ToggleMapDebug()
+			return true
+		end
+	end
+
+	if key == "return" and gameState.Mode == GameStateModes.START then
+		GameStateTransitions.EnterMenu()
+		return true
+	end
+
+	return false
+end
+
+--- Routes mouse presses based on the current game state.
+---@param x number
+---@param y number
+---@param button number
+---@return boolean handled
+function GameInputRouter.HandleMousePressed(x, y, button)
+	local gameState = GameContext.GameState
+	---@type { MainMenu: MainMenuInterface | nil, Battle: BattleInterface | nil, Pause: PauseInterface | nil }
+	local interfaces = GameContext.Interfaces
+
+	if gameState.Mode == GameStateModes.MENU then
+		if interfaces.MainMenu then
+			interfaces.MainMenu:HandleMousePressed(x, y, button)
+		end
+		return true
+	end
+
+	if gameState.Mode == GameStateModes.RUNNING then
+		if interfaces.Battle then
+			interfaces.Battle:HandleMousePressed(x, y, button)
+		end
+		return true
+	end
+
+	if gameState.Mode == GameStateModes.PAUSE then
+		if interfaces.Pause then
+			interfaces.Pause:HandleMousePressed(x, y, button)
+		end
+		return true
+	end
+
+	return false
+end
+
+--- Installs the input handlers for peripheral devices.
+function GameInputRouter.InitializeHandlers()
+	love.keypressed = function(key)
+		GameInputRouter.HandleKeyPressed(key)
+	end
+
+	love.mousepressed = function(x, y, button, istouch, presses)
+		GameInputRouter.HandleMousePressed(x, y, button)
+	end
+end
+
+return GameInputRouter
+
+
+=== FILE: c:\Repositories\NewGame\game\src\worldEntities.lua ===
+local Collisions = require("src.collisions")
+local DEFAULT_CELL_SIZE = 128
+local DEFAULT_MAX_UNITS_PER_TEAM = 60
+
+---@class WorldEntities
+---@field Units table
+---@field Structures table
+---@field Projectiles table
+---@field Boundaries table
+---@field Map table | nil
+---@field WorldBounds { X: number, Y: number, Width: number, Height: number } | nil
+---@field CellSize number
+---@field SpatialCells table | nil
+---@field MaxEntityRadius number
+---@field MaxUnitsPerTeam number
+local WorldEntities = {}
+WorldEntities.__index = WorldEntities
+
+--- Creates a new WorldEntities instance.
+---@return WorldEntities
+function WorldEntities:new()
+	return setmetatable({
+		Units = {},
+		Structures = {},
+		Projectiles = {},
+		Boundaries = {},
+		Map = nil,
+		WorldBounds = nil,
+		CellSize = DEFAULT_CELL_SIZE,
+		SpatialCells = nil,
+		MaxEntityRadius = 0,
+		MaxUnitsPerTeam = DEFAULT_MAX_UNITS_PER_TEAM,
+	}, self)
+end
+
+--- Sets the map for the WorldEntities instance.
+---@param map table | nil
+function WorldEntities:SetMap(map)
+	self.Map = map
+	self.Boundaries = {}
+	self.WorldBounds = nil
+
+	if not map then
+		return
+	end
+
+	if type(map["GetBoundaries"]) == "function" then
+		self.Boundaries = map:GetBoundaries() or {}
+	end
+
+	if type(map["GetWorldBounds"]) == "function" then
+		local originX, originY, width, height = map:GetWorldBounds()
+		if originX and originY and width and height then
+			self.WorldBounds = { X = originX, Y = originY, Width = width, Height = height }
+		end
+	elseif type(map["GetDimensions"]) == "function" then
+		local width, height = map:GetDimensions()
+		if width and height then
+			self.WorldBounds = { X = 0, Y = 0, Width = width, Height = height }
+		end
+	end
+end
+
+--- Adds a unit to the WorldEntities instance.
+---@param unit table
+function WorldEntities:AddUnit(unit)
+	table.insert(self.Units, unit)
+end
+
+--- Adds a structure to the WorldEntities instance.
+---@param structure table
+function WorldEntities:AddStructure(structure)
+	table.insert(self.Structures, structure)
+end
+
+--- Adds a projectile to the WorldEntities instance.
+---@param projectile table
+function WorldEntities:AddProjectile(projectile)
+	table.insert(self.Projectiles, projectile)
+end
+
+--- Returns the world bounds as a tuple (x, y, width, height).
+---@return number, number, number, number
+function WorldEntities:GetWorldBounds()
+	if self.WorldBounds then
+		return self.WorldBounds.X, self.WorldBounds.Y, self.WorldBounds.Width, self.WorldBounds.Height
+	end
+	local width, height = love.graphics.getDimensions()
+	return 0, 0, width, height
+end
+
+--- Checks if a circle intersects with a boundary.
+---@param boundary table | nil
+---@param x number
+---@param y number
+---@param radius number
+---@return boolean
+local function boundaryIntersectsCircle(boundary, x, y, radius)
+	if not boundary or boundary.BlocksMovement == false then
+		return false
+	end
+
+	local shape = boundary.Shape
+	if not shape then
+		return false
+	end
+
+	if shape.Type == "rect" then
+		return Collisions.CircleIntersectsRect(x, y, radius, shape.X, shape.Y, shape.Width, shape.Height)
+	end
+
+	if shape.Type == "circle" then
+		return Collisions.CirclesOverlap(x, y, radius, shape.X, shape.Y, shape.Radius)
+	end
+
+	return false
+end
+
+--- Checks if a rectangle intersects with a boundary.
+---@param boundary table | nil
+---@param x number
+---@param y number
+---@param w number
+---@param h number
+---@return boolean
+local function boundaryIntersectsRect(boundary, x, y, w, h)
+	if not boundary or boundary.BlocksPlacement == false then
+		return false
+	end
+
+	local shape = boundary.Shape
+	if not shape then
+		return false
+	end
+
+	if shape.Type == "rect" then
+		return Collisions.RectsOverlap(x, y, w, h, shape.X, shape.Y, shape.Width, shape.Height)
+	end
+
+	if shape.Type == "circle" then
+		local closestX = math.max(x, math.min(shape.X, x + w))
+		local closestY = math.max(y, math.min(shape.Y, y + h))
+		local dx = shape.X - closestX
+		local dy = shape.Y - closestY
+		return (dx * dx + dy * dy) < (shape.Radius * shape.Radius)
+	end
+
+	return false
+end
+
+--- Checks if a unit can be spawned at the given position.
+---@param x number
+---@param y number
+---@param radius number
+---@return boolean
+function WorldEntities:CanSpawnUnitAt(x, y, radius)
+	local unitRadius = radius or 0
+	local boundsX, boundsY, width, height = self:GetWorldBounds()
+
+	if x - unitRadius < boundsX or y - unitRadius < boundsY
+		or x + unitRadius > (boundsX + width) or y + unitRadius > (boundsY + height) then
+		return false
+	end
+
+	for _, boundary in ipairs(self.Boundaries) do
+		if boundaryIntersectsCircle(boundary, x, y, unitRadius) then
+			return false
+		end
+	end
+
+	for _, unit in ipairs(self.Units) do
+		if Collisions.CirclesOverlap(x, y, unitRadius, unit.Position.X, unit.Position.Y, unit.Size) then
+			return false
+		end
+	end
+
+	return true
+end
+
+--- Returns the cell key
+---@param cellX number
+---@param cellY number
+---@return string
+local function getCellKey(cellX, cellY)
+	return tostring(cellX) .. ":" .. tostring(cellY)
+end
+
+--- Returns the cell coordinates for a given position.
+---@param x number
+---@param y number
+---@param cellSize number
+---@return number, number
+local function getCellCoords(x, y, cellSize)
+	return math.floor(x / cellSize), math.floor(y / cellSize)
+end
+
+--- Inserts an entity into the specified cell.
+---@param cells table
+---@param cellX number
+---@param cellY number
+---@param entity table
+local function insertCellEntity(cells, cellX, cellY, entity)
+	local key = getCellKey(cellX, cellY)
+	if not cells[key] then
+		cells[key] = {}
+	end
+	table.insert(cells[key], entity)
+end
+
+--- Rebuilds the spatial grid from current unit and structure positions.
+function WorldEntities:RebuildSpatialIndex()
+	local cells = {}
+	local maxRadius = 0
+
+	for _, unit in ipairs(self.Units) do
+		local cellX, cellY = getCellCoords(unit.Position.X, unit.Position.Y, self.CellSize)
+		insertCellEntity(cells, cellX, cellY, unit)
+		maxRadius = math.max(maxRadius, unit.Size or 0)
+	end
+
+	for _, structure in ipairs(self.Structures) do
+		local cellX, cellY = getCellCoords(structure.Position.X, structure.Position.Y, self.CellSize)
+		insertCellEntity(cells, cellX, cellY, structure)
+		maxRadius = math.max(maxRadius, (structure.Size or 0) / 2)
+	end
+
+	self.SpatialCells = cells
+	self.MaxEntityRadius = maxRadius
+end
+
+--- Returns the list of units in the world.
+---@return table
+function WorldEntities:GetUnits()
+	return self.Units
+end
+
+--- Returns the list of structures in the world.
+---@return table
+function WorldEntities:GetStructures()
+	return self.Structures
+end
+
+--- Returns the list of projectiles in the world.
+---@return table
+function WorldEntities:GetProjectiles()
+	return self.Projectiles
+end
+
+--- Returns the unit count by team.
+---@param team "player" | "enemy" | string | nil
+---@return number
+function WorldEntities:GetUnitCountByTeam(team)
+	local requestedTeam = team or "player"
+	local count = 0
+	for _, unit in ipairs(self.Units) do
+		if (unit.Team or "player") == requestedTeam then
+			count = count + 1
+		end
+	end
+	return count
+end
+
+--- Returns if a unit can be spawned for the given team.
+---@param team "player" | "enemy" | string | nil
+---@return boolean
+function WorldEntities:CanTeamSpawnUnit(team)
+	return self:GetUnitCountByTeam(team) < self.MaxUnitsPerTeam
+end
+
+--- Tries to spawn a unit from the given structure.
+---@param structure table | nil
+---@param dt number
+---@return boolean
+function WorldEntities:TrySpawnUnitFromStructure(structure, dt)
+	if not structure or type(structure.SpawnUnit) ~= "function" then
+		return false
+	end
+	if (structure.Health or 0) <= 0 then
+		return false
+	end
+
+	local structureTeam = structure.Team or "player"
+	if not self:CanTeamSpawnUnit(structureTeam) then
+		return false
+	end
+
+	local spawnedUnit = structure:SpawnUnit(dt, self)
+	if not spawnedUnit then
+		return false
+	end
+	self:AddUnit(spawnedUnit)
+	return true
+end
+
+--- Applies splash damage from a projectile impact.
+---@param splashImpact table | nil
+function WorldEntities:ApplyProjectileSplash(splashImpact)
+	if splashImpact == nil then
+		return
+	end
+
+	local splashRadiusSq = splashImpact.Radius * splashImpact.Radius
+
+	local function applySplashToTarget(target)
+		if target == nil or target == splashImpact.DirectTarget then
+			return
+		end
+		if target.Team == splashImpact.Team then
+			return
+		end
+		if (target.Health or 0) <= 0 then
+			return
+		end
+
+		local dx = target.Position.X - splashImpact.X
+		local dy = target.Position.Y - splashImpact.Y
+		if (dx * dx + dy * dy) <= splashRadiusSq then
+			local dmg = math.max(1, splashImpact.Damage - (target.Armor or 0))
+			target.Health = target.Health - dmg
+			if type(target.OnDamaged) == "function" then
+				target:OnDamaged(splashImpact.Source)
+			end
+		end
+	end
+
+	for _, unit in ipairs(self.Units) do
+		applySplashToTarget(unit)
+	end
+	for _, structure in ipairs(self.Structures) do
+		applySplashToTarget(structure)
+	end
+end
+
+--- Updates all projectiles in the world.
+---@param dt number
+function WorldEntities:UpdateProjectiles(dt)
+	for i = #self.Projectiles, 1, -1 do
+		local projectile = self.Projectiles[i]
+		local splashImpact = projectile:Update(dt)
+		self:ApplyProjectileSplash(splashImpact)
+		if not projectile:IsActive() then
+			table.remove(self.Projectiles, i)
+		end
+	end
+end
+
+--- Finds the closest enemy unit to the given source unit.
+---@param sourceUnit table
+---@param isTargetInRange fun(target: table): boolean
+---@return table | nil
+function WorldEntities:FindClosestEnemy(sourceUnit, isTargetInRange)
+	if not self.SpatialCells then
+		self:RebuildSpatialIndex()
+	end
+
+	local closestTarget = nil
+	local closestDistSq = math.huge
+	local searchRadius = math.max(sourceUnit.AggroRange or 0, sourceUnit.AttackRange or 0) + self.MaxEntityRadius
+	local minCellX, minCellY = getCellCoords(sourceUnit.Position.X - searchRadius, sourceUnit.Position.Y - searchRadius,
+		self.CellSize)
+	local maxCellX, maxCellY = getCellCoords(sourceUnit.Position.X + searchRadius, sourceUnit.Position.Y + searchRadius,
+		self.CellSize)
+
+	for cellX = minCellX, maxCellX do
+		for cellY = minCellY, maxCellY do
+			local bucket = self.SpatialCells[getCellKey(cellX, cellY)]
+			if bucket then
+				for _, target in ipairs(bucket) do
+					if target ~= sourceUnit and target.Team ~= sourceUnit.Team then
+						local dx = target.Position.X - sourceUnit.Position.X
+						local dy = target.Position.Y - sourceUnit.Position.Y
+						local distSq = dx * dx + dy * dy
+						if isTargetInRange(target) and distSq < closestDistSq then
+							closestDistSq = distSq
+							closestTarget = target
+						end
+					end
+				end
+			end
+		end
+	end
+
+	return closestTarget
+end
+
+--- Finds the enemy town hall for the given team.
+---@param team "player" | "enemy"
+---@return Structure | nil
+function WorldEntities:GetEnemyTownHall(team)
+	for _, structure in ipairs(self.Structures) do
+		if structure.Team ~= team and structure.Name == "TownHall" then
+			return structure
+		end
+	end
+	return nil
+end
+
+--- Checks if a moving unit will collide with any obstacles at the given position.
+---@param movingUnit table
+---@param nextX number
+---@param nextY number
+---@return boolean
+function WorldEntities:WillUnitCollide(movingUnit, nextX, nextY)
+	for _, boundary in ipairs(self.Boundaries) do
+		if boundaryIntersectsCircle(boundary, nextX, nextY, movingUnit.Size) then
+			return true
+		end
+	end
+
+	for _, structure in ipairs(self.Structures) do
+		if structure.Team ~= movingUnit.Team then
+			local rx, ry, rw, rh = Collisions.GetRectBounds(structure.Position.X, structure.Position.Y, structure.Size)
+			if Collisions.CircleIntersectsRect(nextX, nextY, movingUnit.Size, rx, ry, rw, rh) then
+				return true
+			end
+		end
+	end
+
+	for _, otherUnit in ipairs(self.Units) do
+		if otherUnit ~= movingUnit and Collisions.CirclesOverlap(nextX, nextY, movingUnit.Size, otherUnit.Position.X,
+				otherUnit.Position.Y, otherUnit.Size) then
+			return true
+		end
+	end
+
+	return false
+end
+
+--- Checks if a structure can be placed at the given position.
+---@param x number
+---@param y number
+---@param size number
+---@return boolean
+---@return string | nil
+function WorldEntities:CanPlaceStructureAt(x, y, size)
+	local targetX, targetY, targetW, targetH = Collisions.GetRectBounds(x, y, size)
+	local boundsX, boundsY, width, height = self:GetWorldBounds()
+
+	if targetX < boundsX or targetY < boundsY
+		or targetX + targetW > (boundsX + width) or targetY + targetH > (boundsY + height) then
+		return false, "out_of_bounds"
+	end
+
+	for _, boundary in ipairs(self.Boundaries) do
+		if boundaryIntersectsRect(boundary, targetX, targetY, targetW, targetH) then
+			return false, "blocked_by_boundary"
+		end
+	end
+
+	for _, structure in ipairs(self.Structures) do
+		local sx, sy, sw, sh = Collisions.GetRectBounds(structure.Position.X, structure.Position.Y, structure.Size)
+		if Collisions.RectsOverlap(targetX, targetY, targetW, targetH, sx, sy, sw, sh) then
+			return false, "blocked_by_collision"
+		end
+	end
+
+	for _, unit in ipairs(self.Units) do
+		if Collisions.CircleIntersectsRect(unit.Position.X, unit.Position.Y, unit.Size, targetX, targetY, targetW, targetH) then
+			return false, "blocked_by_collision"
+		end
+	end
+
+	return true, nil
+end
+
+--- Removes all units with health <= 0 from the world.
+---@return number removedCount
+function WorldEntities:RemoveDeadUnits()
+	local removedCount = 0
+	for i = #self.Units, 1, -1 do
+		if self.Units[i].Health <= 0 then
+			table.remove(self.Units, i)
+			removedCount = removedCount + 1
+		end
+	end
+	return removedCount
+end
+
+--- Removes all structures with health <= 0 from the world.
+---@return number removedCount
+function WorldEntities:RemoveDeadStructures()
+	local removedCount = 0
+	for i = #self.Structures, 1, -1 do
+		if self.Structures[i].Health <= 0 then
+			table.remove(self.Structures, i)
+			removedCount = removedCount + 1
+		end
+	end
+	return removedCount
+end
+
+return WorldEntities
+
+
+=== FILE: c:\Repositories\NewGame\game\src\steeringSystem.lua ===
+--- Steering-based movement helper for units.
+
+local Collisions = require("src.collisions")
+
+local SteeringSystem = {}
+
+local WEIGHTS = {
+	Desired = 1.0,
+	Separation = 1.4,
+	Obstacle = 1.9,
+}
+
+local PADDING = {
+	UnitSeparation = 6,
+	BoundaryAvoid = 16,
+	StructureAvoid = 10,
+	WorldEdgeAvoid = 18,
+}
+
+--- Description of function normalize.
+---@param x number
+---@param y number
+---@return number, number
+local function normalize(x, y)
+	local len = math.sqrt(x * x + y * y)
+	if len <= 0 then
+		return 0, 0
+	end
+	return x / len, y / len
+end
+
+--- Description of function clamp.
+---@param value number
+---@param minValue number
+---@param maxValue number
+---@return number
+local function clamp(value, minValue, maxValue)
+	if value < minValue then
+		return minValue
+	end
+	if value > maxValue then
+		return maxValue
+	end
+	return value
+end
+
+--- Description of function getRectRepulsion.
+---@param x number
+---@param y number
+---@param rx number
+---@param ry number
+---@param rw number
+---@param rh number
+---@return number, number, number
+local function getRectRepulsion(x, y, rx, ry, rw, rh)
+	local closestX = clamp(x, rx, rx + rw)
+	local closestY = clamp(y, ry, ry + rh)
+	local dx = x - closestX
+	local dy = y - closestY
+	local distSq = dx * dx + dy * dy
+	if distSq <= 0.0001 then
+		local centerX = rx + (rw * 0.5)
+		local centerY = ry + (rh * 0.5)
+		dx = x - centerX
+		dy = y - centerY
+		distSq = dx * dx + dy * dy
+	end
+	local dist = math.sqrt(math.max(0.0001, distSq))
+	return dx / dist, dy / dist, dist
+end
+
+--- Description of function getDesiredDirection.
+---@param unit table
+---@param targetX number | nil
+---@param targetY number | nil
+---@return number, number
+local function getDesiredDirection(unit, targetX, targetY)
+	if not targetX or not targetY then
+		return 0, 0
+	end
+	return normalize(targetX - unit.Position.X, targetY - unit.Position.Y)
+end
+
+--- Description of function getSeparationForce.
+---@param unit table
+---@param entities WorldEntities
+---@return number, number
+local function getSeparationForce(unit, entities)
+	local forceX = 0
+	local forceY = 0
+
+	for _, other in ipairs(entities:GetUnits()) do
+		if other ~= unit then
+			local dx = unit.Position.X - other.Position.X
+			local dy = unit.Position.Y - other.Position.Y
+			local distSq = dx * dx + dy * dy
+			local minDist = (unit.Size + other.Size + PADDING.UnitSeparation)
+			local minDistSq = minDist * minDist
+			if distSq > 0.0001 and distSq < minDistSq then
+				local dist = math.sqrt(distSq)
+				local overlapRatio = (minDist - dist) / minDist
+				local dirX = dx / dist
+				local dirY = dy / dist
+				forceX = forceX + (dirX * overlapRatio)
+				forceY = forceY + (dirY * overlapRatio)
+			end
+		end
+	end
+
+	return forceX, forceY
+end
+
+--- Description of function getObstacleForce.
+---@param unit table
+---@param entities WorldEntities
+---@return number, number
+local function getObstacleForce(unit, entities)
+	local forceX = 0
+	local forceY = 0
+
+	for _, boundary in ipairs(entities.Boundaries or {}) do
+		if boundary.BlocksMovement ~= false and boundary.Shape then
+			if boundary.Shape.Type == "rect" then
+				local dirX, dirY, dist = getRectRepulsion(
+					unit.Position.X,
+					unit.Position.Y,
+					boundary.Shape.X,
+					boundary.Shape.Y,
+					boundary.Shape.Width,
+					boundary.Shape.Height
+				)
+				local avoidDist = unit.Size + PADDING.BoundaryAvoid
+				if dist < avoidDist then
+					local strength = (avoidDist - dist) / avoidDist
+					forceX = forceX + (dirX * strength)
+					forceY = forceY + (dirY * strength)
+				end
+			elseif boundary.Shape.Type == "circle" then
+				local dx = unit.Position.X - boundary.Shape.X
+				local dy = unit.Position.Y - boundary.Shape.Y
+				local dist = math.sqrt(math.max(0.0001, dx * dx + dy * dy))
+				local avoidDist = unit.Size + boundary.Shape.Radius + PADDING.BoundaryAvoid
+				if dist < avoidDist then
+					local strength = (avoidDist - dist) / avoidDist
+					forceX = forceX + ((dx / dist) * strength)
+					forceY = forceY + ((dy / dist) * strength)
+				end
+			end
+		end
+	end
+
+	for _, structure in ipairs(entities:GetStructures()) do
+		if structure.Team ~= unit.Team then
+			local rx, ry, rw, rh = Collisions.GetRectBounds(structure.Position.X, structure.Position.Y, structure.Size)
+			local dirX, dirY, dist = getRectRepulsion(unit.Position.X, unit.Position.Y, rx, ry, rw, rh)
+			local avoidDist = unit.Size + (structure.Size * 0.5) + PADDING.StructureAvoid
+			if dist < avoidDist then
+				local strength = (avoidDist - dist) / avoidDist
+				forceX = forceX + (dirX * strength)
+				forceY = forceY + (dirY * strength)
+			end
+		end
+	end
+
+	local boundsX, boundsY, boundsW, boundsH = entities:GetWorldBounds()
+	if unit.Position.X - boundsX < PADDING.WorldEdgeAvoid then
+		forceX = forceX + (1 - ((unit.Position.X - boundsX) / PADDING.WorldEdgeAvoid))
+	end
+	if (boundsX + boundsW) - unit.Position.X < PADDING.WorldEdgeAvoid then
+		forceX = forceX - (1 - (((boundsX + boundsW) - unit.Position.X) / PADDING.WorldEdgeAvoid))
+	end
+	if unit.Position.Y - boundsY < PADDING.WorldEdgeAvoid then
+		forceY = forceY + (1 - ((unit.Position.Y - boundsY) / PADDING.WorldEdgeAvoid))
+	end
+	if (boundsY + boundsH) - unit.Position.Y < PADDING.WorldEdgeAvoid then
+		forceY = forceY - (1 - (((boundsY + boundsH) - unit.Position.Y) / PADDING.WorldEdgeAvoid))
+	end
+
+	return forceX, forceY
+end
+
+--- Description of function resolveCollisionFallback.
+---@param unit table
+---@param entities WorldEntities
+---@param moveDirX number
+---@param moveDirY number
+---@return number, number
+local function resolveCollisionFallback(unit, entities, moveDirX, moveDirY)
+	local step = unit.Speed
+	local candidates = {
+		{ X = unit.Position.X + (moveDirX * step), Y = unit.Position.Y + (moveDirY * step) },
+		{ X = unit.Position.X + (-moveDirY * step), Y = unit.Position.Y + (moveDirX * step) },
+		{ X = unit.Position.X + (moveDirY * step), Y = unit.Position.Y + (-moveDirX * step) },
+		{ X = unit.Position.X + (-moveDirY * step * 0.6), Y = unit.Position.Y + (moveDirX * step * 0.6) },
+		{ X = unit.Position.X + (moveDirY * step * 0.6), Y = unit.Position.Y + (-moveDirX * step * 0.6) },
+	}
+
+	for _, candidate in ipairs(candidates) do
+		if not entities:WillUnitCollide(unit, candidate.X, candidate.Y) then
+			return candidate.X, candidate.Y
+		end
+	end
+
+	return unit.Position.X, unit.Position.Y
+end
+
+--- Description of function SteeringSystem.GetNextPosition.
+---@param unit table
+---@param entities WorldEntities
+---@param targetX number | nil
+---@param targetY number | nil
+---@return number, number
+function SteeringSystem.GetNextPosition(unit, entities, targetX, targetY)
+	local desiredX, desiredY = getDesiredDirection(unit, targetX, targetY)
+	if desiredX == 0 and desiredY == 0 then
+		return unit.Position.X, unit.Position.Y
+	end
+
+	local separationX, separationY = getSeparationForce(unit, entities)
+	local obstacleX, obstacleY = getObstacleForce(unit, entities)
+
+	local steerX =
+		(desiredX * WEIGHTS.Desired) +
+		(separationX * WEIGHTS.Separation) +
+		(obstacleX * WEIGHTS.Obstacle)
+	local steerY =
+		(desiredY * WEIGHTS.Desired) +
+		(separationY * WEIGHTS.Separation) +
+		(obstacleY * WEIGHTS.Obstacle)
+
+	local moveDirX, moveDirY = normalize(steerX, steerY)
+	if moveDirX == 0 and moveDirY == 0 then
+		moveDirX, moveDirY = desiredX, desiredY
+	end
+
+	local nextX = unit.Position.X + (moveDirX * unit.Speed)
+	local nextY = unit.Position.Y + (moveDirY * unit.Speed)
+	if entities:WillUnitCollide(unit, nextX, nextY) then
+		return resolveCollisionFallback(unit, entities, moveDirX, moveDirY)
+	end
+
+	return nextX, nextY
+end
+
+return SteeringSystem
+
+
+=== FILE: c:\Repositories\NewGame\game\src\navigationSystem.lua ===
+--- Navigation helpers for path-based fallback movement.
+
+local NavigationSystem = {}
+
+local WAYPOINT_REACHED_DISTANCE = 14
+
+--- Returns the path assigned to the unit, or finds a new one if necessary.
+---@param unit table
+---@param map table
+---@return table | nil
+local function getPathForUnit(unit, map)
+	local selectedPath = nil
+
+	if unit.PathId and type(map["GetPathById"]) == "function" then
+		selectedPath = map:GetPathById(unit.PathId)
+	end
+
+	if not selectedPath and type(map["GetClosestPathForTeam"]) == "function" then
+		selectedPath = map:GetClosestPathForTeam(unit.Position.X, unit.Position.Y, unit.Team)
+		if selectedPath and selectedPath.Id ~= unit.PathId then
+			unit.PathId = selectedPath.Id
+			unit.PathWaypointIndex = nil
+		end
+	end
+
+	if not selectedPath and type(map["GetPrimaryPathForTeam"]) == "function" then
+		selectedPath = map:GetPrimaryPathForTeam(unit.Team)
+		if selectedPath and selectedPath.Id ~= unit.PathId then
+			unit.PathId = selectedPath.Id
+			unit.PathWaypointIndex = nil
+		end
+	end
+
+	return selectedPath
+end
+
+--- Returns the current waypoint index for the unit.
+---@param unit table
+---@param path table
+---@return number | nil
+local function getCurrentWaypointIndex(unit, path)
+	local waypointIndex = unit.PathWaypointIndex
+	if waypointIndex ~= nil then
+		return waypointIndex
+	end
+
+	if type(path.GetWaypoints) ~= "function" then
+		return path:GetClosestWaypointIndex(unit.Position.X, unit.Position.Y)
+	end
+
+	local waypoints = path:GetWaypoints()
+	if not waypoints or #waypoints == 0 then
+		return path:GetClosestWaypointIndex(unit.Position.X, unit.Position.Y)
+	end
+
+	local forwardSign = (unit.Team == "enemy") and -1 or 1
+	local tolerance = math.max(8, unit.Size or 0)
+	local bestAheadIndex = nil
+	local bestAheadDistSq = math.huge
+
+	for i, waypoint in ipairs(waypoints) do
+		local dx = waypoint.X - unit.Position.X
+		local dy = waypoint.Y - unit.Position.Y
+		local isAhead = (forwardSign > 0 and dx >= -tolerance) or (forwardSign < 0 and dx <= tolerance)
+		if isAhead then
+			local distSq = dx * dx + dy * dy
+			if distSq < bestAheadDistSq then
+				bestAheadDistSq = distSq
+				bestAheadIndex = i
+			end
+		end
+	end
+
+	if bestAheadIndex ~= nil then
+		return bestAheadIndex
+	end
+
+	return path:GetClosestWaypointIndex(unit.Position.X, unit.Position.Y)
+end
+
+--- Picks the next waypoint for the unit.
+---@param unit table
+---@param path table
+---@return table | nil
+local function pickWaypoint(unit, path)
+	local waypointIndex = getCurrentWaypointIndex(unit, path)
+	if waypointIndex == nil then
+		return nil
+	end
+
+	local waypoint = path:GetWaypoint(waypointIndex)
+	if waypoint == nil then
+		return nil
+	end
+
+	local dx = waypoint.X - unit.Position.X
+	local dy = waypoint.Y - unit.Position.Y
+	local reachedDist = math.max(WAYPOINT_REACHED_DISTANCE, unit.Speed * 1.5)
+	if (dx * dx + dy * dy) <= (reachedDist * reachedDist) then
+		if waypointIndex < #path:GetWaypoints() then
+			waypointIndex = waypointIndex + 1
+		end
+		waypoint = path:GetWaypoint(waypointIndex)
+	end
+
+	unit.PathWaypointIndex = waypointIndex
+	return waypoint
+end
+
+--- Returns the target point for the unit along its path.
+---@param unit table
+---@param entities WorldEntities
+---@return number | nil, number | nil
+function NavigationSystem.GetPathTargetPoint(unit, entities)
+	if not entities or not entities.Map then
+		return nil, nil
+	end
+
+	local map = entities.Map
+	if not map then
+		return nil, nil
+	end
+
+	local path = getPathForUnit(unit, map)
+	if not path or type(path.GetWaypoint) ~= "function" then
+		return nil, nil
+	end
+
+	local waypoint = pickWaypoint(unit, path)
+	if waypoint == nil then
+		return nil, nil
+	end
+
+	return waypoint.X, waypoint.Y
+end
+
+return NavigationSystem
+
+
+=== FILE: c:\Repositories\NewGame\game\src\collisions.lua ===
+--- Shared collision helper functions.
+
+local Collisions = {}
+
+--- Returns true if two circles overlap.
+---@param ax number
+---@param ay number
+---@param ar number
+---@param bx number
+---@param by number
+---@param br number
+---@return boolean
+function Collisions.CirclesOverlap(ax, ay, ar, bx, by, br)
+	local dx = ax - bx
+	local dy = ay - by
+	local radiusSum = ar + br
+	return (dx * dx + dy * dy) < (radiusSum * radiusSum)
+end
+
+--- Returns true if a circle intersects an axis-aligned rectangle.
+---@param cx number
+---@param cy number
+---@param radius number
+---@param rx number
+---@param ry number
+---@param rw number
+---@param rh number
+---@return boolean
+function Collisions.CircleIntersectsRect(cx, cy, radius, rx, ry, rw, rh)
+	local closestX = math.max(rx, math.min(cx, rx + rw))
+	local closestY = math.max(ry, math.min(cy, ry + rh))
+	local dx = cx - closestX
+	local dy = cy - closestY
+	return (dx * dx + dy * dy) < (radius * radius)
+end
+
+--- Returns true if two axis-aligned rectangles overlap.
+---@param ax number
+---@param ay number
+---@param aw number
+---@param ah number
+---@param bx number
+---@param by number
+---@param bw number
+---@param bh number
+---@return boolean
+function Collisions.RectsOverlap(ax, ay, aw, ah, bx, by, bw, bh)
+	return ax < bx + bw and ax + aw > bx and ay < by + bh and ay + ah > by
+end
+
+--- Returns the bounds (x, y, w, h) of a centered square entity.
+---@param centerX number
+---@param centerY number
+---@param size number
+---@return number, number, number, number
+function Collisions.GetRectBounds(centerX, centerY, size)
+	local halfSize = size / 2
+	return centerX - halfSize, centerY - halfSize, size, size
+end
+
+return Collisions
+
+
+=== FILE: c:\Repositories\NewGame\game\BaseClasses\object.lua ===
+--- Base Object class for all game objects.
+
+local DEFAULTS = {
+	Name = "Object",
+	Position = { X = 0, Y = 0 },
+}
+
+---@class Object
+---@field Name string
+---@field Position {X: number, Y: number}
+local Object = {}
+Object.__index = Object
+
+--- Creates a new Object.
+---@generic T : Object
+---@param self T
+---@param Name string | nil
+---@return T
+function Object:new(Name)
+	local newObj = {}
+	setmetatable(newObj, self)
+	newObj.Name = Name or DEFAULTS.Name
+	newObj.Position = { X = DEFAULTS.Position.X, Y = DEFAULTS.Position.Y }
+	return newObj
+end
+
+--- Sets the current location of the Object.
+---@param Position {X: number, Y: number}
+function Object:Place(Position)
+	if Position.X then
+		self.Position.X = Position.X
+	end
+	if Position.Y then
+		self.Position.Y = Position.Y
+	end
+end
+
+return Object
+
+
+=== FILE: c:\Repositories\NewGame\game\BaseClasses\button.lua ===
+--- Button class for creating interactive buttons in the game.
+
+local DEFAULTS = {
+	Name = "Button",
+	Action = function() end,
+	Width = 100,
+	Height = 50,
+	Text = "Button",
+	PositionButton = { X = 0, Y = 0 },
+	PositionText = { X = 0, Y = 0 },
+}
+
+---@class Button
+---@field Name string
+---@field Action function
+---@field Width number
+---@field Height number
+---@field Text string
+---@field PositionButton table
+---@field PositionText table
+local Button = {}
+Button.__index = Button
+
+--- Creates a new Button.
+---@generic T : Button
+---@param Name string | nil
+---@param Action function | nil
+---@param Width number | nil
+---@param Height number | nil
+---@param Text string | nil
+---@param PositionButton table | nil
+---@param PositionText table | nil
+---@return T
+function Button:new(Name, Action, Width, Height, Text, PositionButton, PositionText)
+	local newButton = {}
+	setmetatable(newButton, self)
+	newButton.Name = Name or DEFAULTS.Name
+	newButton.Action = Action or DEFAULTS.Action
+	newButton.Width = Width or DEFAULTS.Width
+	newButton.Height = Height or DEFAULTS.Height
+	newButton.Text = Text or DEFAULTS.Text
+	newButton.PositionButton = PositionButton or DEFAULTS.PositionButton
+	newButton.PositionText = PositionText or DEFAULTS.PositionText
+	return newButton
+end
+
+--- Draws the button on the screen.
+function Button:Draw()
+	love.graphics.setColor(0.5, 0.5, 0.5)
+	love.graphics.rectangle("fill", self.PositionButton.X, self.PositionButton.Y, self.Width, self.Height)
+	love.graphics.setColor(1, 1, 1)
+	love.graphics.printf(self.Text, self.PositionButton.X + self.PositionText.X,
+		self.PositionButton.Y + self.PositionText.Y, self.Width, "center")
+end
+
+--- Checks if the button is pressed based on the mouse position and cursor radius.
+--- If the button is pressed, its associated action will be executed.
+---@param PositionMouse {X: number, Y: number}
+---@param CursorRadius number
+---@return boolean True if the button is pressed, otherwise false.
+function Button:IsPressed(PositionMouse, CursorRadius)
+	if PositionMouse.X + CursorRadius >= self.PositionButton.X and PositionMouse.X - CursorRadius <= self.PositionButton.X + self.Width and
+		PositionMouse.Y + CursorRadius >= self.PositionButton.Y and PositionMouse.Y - CursorRadius <= self.PositionButton.Y + self.Height then
+		self.Action()
+		return true
+	end
+	return false
+end
+
+return Button
+
+
+=== FILE: c:\Repositories\NewGame\game\BaseClasses\text.lua ===
+--- Text class for reusable UI text rendering.
+
+local DEFAULTS = {
+	Content = "",
+	Position = { X = 0, Y = 0 },
+	Width = 0,
+	Align = "left",
+	Color = { 1, 1, 1, 1 },
+}
+
+---@class Text
+---@field Content string
+---@field Position {X: number, Y: number}
+---@field Width number
+---@field Align "left" | "center" | "right" | "justify"
+---@field Color number[]
+local Text = {}
+Text.__index = Text
+
+--- Creates a new Text object.
+---@generic T : Text
+---@param content string | nil
+---@param position {X: number, Y: number} | nil
+---@param width number | nil
+---@param align "left" | "center" | "right" | "justify" | nil
+---@param color number[] | nil
+---@return T
+function Text:new(content, position, width, align, color)
+	local text = setmetatable({}, self)
+	text.Content = content or DEFAULTS.Content
+	text.Position = position or DEFAULTS.Position
+	text.Width = width or DEFAULTS.Width
+	text.Align = align or DEFAULTS.Align
+	text.Color = color or DEFAULTS.Color
+	return text
+end
+
+--- Draws the text using its current properties.
+function Text:Draw()
+	love.graphics.setColor(self.Color)
+	love.graphics.printf(self.Content, self.Position.X, self.Position.Y, self.Width, self.Align)
+	love.graphics.setColor(1, 1, 1, 1)
+end
+
+return Text
+
+
+=== FILE: c:\Repositories\NewGame\game\Systems\matchSetup.lua ===
+--- MatchSetup module - builds initial match state.
+
+local World = require("world")
+local Resources = require("gameResources")
+local BattleInterface = require("Interfaces.battleInterface")
+local EnemyBuilderAI = require("Systems.enemyBuilderAI")
+local DefaultMap = require("Maps.Maps.defaultMap")
+
+local MatchSetup = {}
+
+--- Creates a fresh match state.
+---@param startResources {Gold: number, Metal: number, Aether: number} | nil
+---@return World
+---@return Resources
+function MatchSetup.CreateMatchState(startResources)
+	startResources = startResources or { Gold = 100, Metal = 50, Aether = 10 }
+	local world = World:new()
+	local resources = Resources:new(startResources.Gold, startResources.Metal, startResources.Aether)
+	return world, resources
+end
+
+--- Creates a fresh runtime state for a default match.
+---@param startResources {Gold: number, Metal: number, Aether: number} | nil
+---@return World
+---@return Resources
+---@return BattleInterface
+---@return boolean
+---@return EnemyBuilderAI
+function MatchSetup.CreateDefaultRuntimeState(startResources)
+	local world, resources = MatchSetup.CreateMatchState(startResources)
+	local battleInterface = BattleInterface:new(resources)
+	local hasInitializedMatch = false
+	local enemyBuilderAI = EnemyBuilderAI:new()
+	return world, resources, battleInterface, hasInitializedMatch, enemyBuilderAI
+end
+
+--- Places default starting structures for a new match.
+---@param world World
+function MatchSetup.InitializeDefault(world)
+	---@type any
+	local map = DefaultMap.Create()
+	world:SetMap(map)
+
+	if type(map.ApplyInitialState) == "function" then
+		map:ApplyInitialState(world)
+	end
+end
+
+return MatchSetup
+
+
+=== FILE: c:\Repositories\NewGame\game\Systems\enemyBuilderAI.lua ===
+--- Simple AI that periodically places enemy structures on the enemy side.
+
+local GameContext = require("src.gameContext")
+
+local EnemyBuilderAI = {}
+EnemyBuilderAI.__index = EnemyBuilderAI
+
+local DEFAULT_STRUCTURE_TYPES = {
+	"BarbarianCamp",
+	"Barracks",
+	"ArcherCamp",
+	"Library",
+	"ArcherTower",
+	"MageTower",
+}
+
+local function randomBetween(minValue, maxValue)
+	return minValue + (love.math.random() * (maxValue - minValue))
+end
+
+--- Picks a random structure type from the list of available types.
+---@param structureTypes string[]
+---@return string
+local function pickRandomStructureType(structureTypes)
+	local randomIndex = love.math.random(1, #structureTypes)
+	return structureTypes[randomIndex]
+end
+
+--- Creates a new instance of the EnemyBuilderAI.
+---@class EnemyBuilderAI
+---@field PlacementInterval number
+---@field PlacementTimer number
+---@field MaxPlacementAttempts number
+---@field StructureTypes string[]
+---@field EnemyResourcesProxy table
+---@param config {PlacementInterval: number | nil, MaxPlacementAttempts: number | nil, StructureTypes: string[] | nil} | nil
+---@return EnemyBuilderAI
+function EnemyBuilderAI:new(config)
+	config = config or {}
+
+	local enemyBuilderAI = setmetatable({}, self)
+	enemyBuilderAI.PlacementInterval = config.PlacementInterval or 8
+	enemyBuilderAI.PlacementTimer = 0
+	enemyBuilderAI.MaxPlacementAttempts = config.MaxPlacementAttempts or 16
+	enemyBuilderAI.StructureTypes = config.StructureTypes or DEFAULT_STRUCTURE_TYPES
+
+	-- Enemy placements should not consume player resources.
+	enemyBuilderAI.EnemyResourcesProxy = {
+		Spend = function(_self, _costs)
+			return true
+		end,
+		AddIncomeBonus = function(_self, _goldBonus, _metalBonus)
+			return
+		end,
+	}
+
+	return enemyBuilderAI
+end
+
+--- Tries to place an enemy structure on the map.
+---@return boolean
+function EnemyBuilderAI:TryPlaceEnemyStructure()
+	if #self.StructureTypes == 0 then
+		return false
+	end
+
+	local world = GameContext.Runtime.World
+	if not world then
+		return false
+	end
+
+	local width, height = love.graphics.getDimensions()
+	local minX = width * 0.58
+	local maxX = width * 0.92
+	local minY = height * 0.12
+	local maxY = height * 0.88
+
+	for _ = 1, self.MaxPlacementAttempts do
+		local structureType = pickRandomStructureType(self.StructureTypes)
+		local x = randomBetween(minX, maxX)
+		local y = randomBetween(minY, maxY)
+		local placed = world:PlaceStructure(structureType, self.EnemyResourcesProxy, x, y, "enemy")
+		if placed then
+			return true
+		end
+	end
+
+	return false
+end
+
+--- Updates the EnemyBuilderAI.
+---@param dt number
+function EnemyBuilderAI:Update(dt)
+	if not GameContext.Runtime.World then
+		return
+	end
+
+	self.PlacementTimer = self.PlacementTimer + dt
+	while self.PlacementTimer >= self.PlacementInterval do
+		self.PlacementTimer = self.PlacementTimer - self.PlacementInterval
+		self:TryPlaceEnemyStructure()
+	end
+end
+
+return EnemyBuilderAI
+
+
+=== FILE: c:\Repositories\NewGame\game\Interfaces\battleInterface.lua ===
+--- BattleInterface module
+
+local Button = require("BaseClasses.button")
+local GameContext = require("src.gameContext")
+
+local BASE_BUTTON_WIDTH = 170
+local BASE_BUTTON_HEIGHT = 50
+local BASE_SPACING_X = 20
+local BASE_BOTTOM_MARGIN = 24
+local PLACEMENT_HINT_DURATION = 2.0
+
+local function onBarbarianButtonPressed(interface)
+	interface.SelectedStructureType = "BarbarianCamp"
+end
+
+local function onKnightButtonPressed(interface)
+	interface.SelectedStructureType = "Barracks"
+end
+
+local function onArcherButtonPressed(interface)
+	interface.SelectedStructureType = "ArcherCamp"
+end
+
+local function onMageButtonPressed(interface)
+	interface.SelectedStructureType = "Library"
+end
+
+---@class BattleInterface
+---@field BarbarianButton Button
+---@field KnightButton Button
+---@field ArcherButton Button
+---@field MageButton Button
+---@field SelectedStructureType string | nil
+---@field Resources Resources | nil
+---@field PlacementHintText string | nil
+---@field PlacementHintTimeLeft number
+local BattleInterface = {}
+BattleInterface.__index = BattleInterface
+
+--- Returns a user-friendly message for a placement failure reason.
+---@param reason string | nil
+---@return string
+local function getPlacementFailureMessage(reason)
+	if reason == "invalid_type" then
+		return "Bitte zuerst eine Struktur auswaehlen."
+	end
+	if reason == "invalid_class" then
+		return "Diese Struktur kann aktuell nicht platziert werden."
+	end
+	if reason == "invalid_resources" then
+		return "Ressourcen sind nicht initialisiert."
+	end
+	if reason == "blocked_by_collision" then
+		return "Platzierung blockiert: Zu nah an Einheiten oder Strukturen."
+	end
+	if reason == "out_of_bounds" then
+		return "Platzierung ausserhalb der Karte ist nicht erlaubt."
+	end
+	if reason == "wrong_side" then
+		return "Platzierung nur auf der eigenen Spielfeldhaelfte erlaubt."
+	end
+	if reason == "not_affordable" then
+		return "Nicht genug Ressourcen fuer diese Struktur."
+	end
+	return "Struktur konnte nicht platziert werden."
+end
+
+--- Creates a new BattleInterface table.
+---@param resources table | nil
+---@return BattleInterface
+function BattleInterface:new(resources)
+	local battleInterface = setmetatable({}, self)
+	battleInterface.SelectedStructureType = nil
+	battleInterface.Resources = resources
+	battleInterface.PlacementHintText = nil
+	battleInterface.PlacementHintTimeLeft = 0
+
+	local definitions = {
+		{ key = "BarbarianButton", name = "Barbarian", text = "Barbarian", action = function() onBarbarianButtonPressed(
+			battleInterface) end },
+		{ key = "KnightButton",    name = "Knight",    text = "Knight",    action = function() onKnightButtonPressed(
+			battleInterface) end },
+		{ key = "ArcherButton",    name = "Archer",    text = "Archer",    action = function() onArcherButtonPressed(
+			battleInterface) end },
+		{ key = "MageButton",      name = "Mage",      text = "Mage",      action = function() onMageButtonPressed(
+			battleInterface) end },
+	}
+
+	for index, definition in ipairs(definitions) do
+		battleInterface[definition.key] = Button:new(
+			definition.name,
+			definition.action,
+			BASE_BUTTON_WIDTH,
+			BASE_BUTTON_HEIGHT,
+			definition.text,
+			{ X = 0, Y = 0 },
+			{ X = 0, Y = 15 }
+		)
+	end
+
+	battleInterface:RebuildLayout()
+
+	return battleInterface
+end
+
+--- Updates the BattleInterface.
+---@param dt number
+function BattleInterface:Update(dt)
+	if self.PlacementHintTimeLeft > 0 then
+		self.PlacementHintTimeLeft = math.max(0, self.PlacementHintTimeLeft - dt)
+		if self.PlacementHintTimeLeft == 0 then
+			self.PlacementHintText = nil
+		end
+	end
+end
+
+--- Shows a placement failure message for a specified reason.
+---@param reason string | nil
+function BattleInterface:ShowPlacementFailure(reason)
+	self.PlacementHintText = getPlacementFailureMessage(reason)
+	self.PlacementHintTimeLeft = PLACEMENT_HINT_DURATION
+end
+
+--- Recomputes battle button positions based on current window size.
+function BattleInterface:RebuildLayout()
+	local width, height = love.graphics.getDimensions()
+	local scale = math.min(width / 1280, height / 720)
+	scale = math.max(0.75, math.min(1.6, scale))
+
+	local buttonWidth = math.floor(BASE_BUTTON_WIDTH * scale + 0.5)
+	local buttonHeight = math.floor(BASE_BUTTON_HEIGHT * scale + 0.5)
+	local spacingX = math.floor(BASE_SPACING_X * scale + 0.5)
+	local bottomMargin = math.floor(BASE_BOTTOM_MARGIN * scale + 0.5)
+
+	local buttonCount = 4
+	local totalWidth = buttonCount * buttonWidth + (buttonCount - 1) * spacingX
+	local startX = (width - totalWidth) / 2
+	local y = height - buttonHeight - bottomMargin
+	local textOffsetY = math.floor(buttonHeight * 0.3 + 0.5)
+
+	self.BarbarianButton.Width = buttonWidth
+	self.BarbarianButton.Height = buttonHeight
+	self.BarbarianButton.PositionText.Y = textOffsetY
+
+	self.BarbarianButton.PositionButton.X = startX
+	self.BarbarianButton.PositionButton.Y = y
+
+	self.KnightButton.Width = buttonWidth
+	self.KnightButton.Height = buttonHeight
+	self.KnightButton.PositionText.Y = textOffsetY
+
+	self.KnightButton.PositionButton.X = startX + (buttonWidth + spacingX)
+	self.KnightButton.PositionButton.Y = y
+
+	self.ArcherButton.Width = buttonWidth
+	self.ArcherButton.Height = buttonHeight
+	self.ArcherButton.PositionText.Y = textOffsetY
+
+	self.ArcherButton.PositionButton.X = startX + (2 * (buttonWidth + spacingX))
+	self.ArcherButton.PositionButton.Y = y
+
+	self.MageButton.Width = buttonWidth
+	self.MageButton.Height = buttonHeight
+	self.MageButton.PositionText.Y = textOffsetY
+
+	self.MageButton.PositionButton.X = startX + (3 * (buttonWidth + spacingX))
+	self.MageButton.PositionButton.Y = y
+end
+
+--- Draws all battle buttons and the HUD.
+function BattleInterface:Draw()
+	if self.PlacementHintText and self.PlacementHintTimeLeft > 0 then
+		local width = love.graphics.getDimensions()
+		love.graphics.setColor(1, 0.3, 0.3, 1)
+		love.graphics.printf(self.PlacementHintText, 0, 36, width, "center")
+		love.graphics.setColor(1, 1, 1, 1)
+	end
+
+	local world = GameContext.Runtime.World
+	if world and world.Entities and type(world.Entities.GetUnitCountByTeam) == "function" then
+		local playerCount = world.Entities:GetUnitCountByTeam("player")
+		local enemyCount = world.Entities:GetUnitCountByTeam("enemy")
+		local maxUnits = world.Entities.MaxUnitsPerTeam or 0
+
+		love.graphics.setColor(1, 1, 1, 1)
+		love.graphics.printf(string.format("Spawn Player: %d/%d", playerCount, maxUnits), 20, 56, 260, "left")
+		love.graphics.printf(string.format("Spawn Enemy: %d/%d", enemyCount, maxUnits), 20, 74, 260, "left")
+	end
+
+	if self.Resources then
+		local width = love.graphics.getDimensions()
+		local rightX = width - 20
+		local columnWidth = 120
+		local topY = 10
+		local incomeY = topY + 16
+		local incomeInterval = self.Resources.IncomeInterval or 5
+		local goldIncome = self.Resources.BaseGoldIncomeValue or 0
+		local metalIncome = self.Resources.BaseMetalIncomeValue or 0
+		local aetherIncome = rawget(self.Resources, "BaseAetherIncomeValue") or 0
+
+		local goldColumnX = rightX - (columnWidth * 3)
+		local metalColumnX = rightX - (columnWidth * 2)
+		local aetherColumnX = rightX - columnWidth
+
+		love.graphics.printf(string.format("Gold: %d", self.Resources.Gold), goldColumnX, topY, columnWidth, "right")
+		love.graphics.printf(string.format("Metal: %d", self.Resources.Metal), metalColumnX, topY, columnWidth, "right")
+		love.graphics.printf(string.format("Aether: %d", self.Resources.Aether), aetherColumnX, topY, columnWidth,
+			"right")
+
+		love.graphics.printf(string.format("+%d / %ds", goldIncome, incomeInterval), goldColumnX, incomeY, columnWidth,
+			"right")
+		love.graphics.printf(string.format("+%d / %ds", metalIncome, incomeInterval), metalColumnX, incomeY, columnWidth,
+			"right")
+		love.graphics.printf(string.format("+%d / %ds", aetherIncome, incomeInterval), aetherColumnX, incomeY, columnWidth,
+			"right")
+	end
+
+	self.BarbarianButton:Draw()
+	self.KnightButton:Draw()
+	self.ArcherButton:Draw()
+	self.MageButton:Draw()
+end
+
+--- Checks if any battle button is pressed.
+---@param PositionMouse {X: number, Y: number}
+---@param CursorRadius number
+function BattleInterface:IsPressed(PositionMouse, CursorRadius)
+	if self.BarbarianButton:IsPressed(PositionMouse, CursorRadius) then
+		return true
+	end
+	if self.KnightButton:IsPressed(PositionMouse, CursorRadius) then
+		return true
+	end
+	if self.ArcherButton:IsPressed(PositionMouse, CursorRadius) then
+		return true
+	end
+	if self.MageButton:IsPressed(PositionMouse, CursorRadius) then
+		return true
+	end
+	return false
+end
+
+--- Handles a raw mouse press event for battle UI and structure placement.
+---@param x number
+---@param y number
+---@param button number
+---@return boolean True when any click path was processed.
+function BattleInterface:HandleMousePressed(x, y, button)
+	if button ~= 1 then
+		return false
+	end
+
+	local uiClickHandled = self:IsPressed({ X = x, Y = y }, 0)
+	if uiClickHandled then
+		return true
+	end
+
+	local world = GameContext.Runtime.World
+	local resources = GameContext.Runtime.Resources
+	if not world or not resources then
+		self:ShowPlacementFailure("invalid_resources")
+		return true
+	end
+
+	local placed, reason = world:PlaceStructure(self:GetSelectedStructureType(), resources, x, y)
+	if not placed then
+		self:ShowPlacementFailure(reason)
+	end
+	return true
+end
+
+---@return string | nil
+function BattleInterface:GetSelectedStructureType()
+	return self.SelectedStructureType
+end
+
+return BattleInterface
+
+
+=== FILE: c:\Repositories\NewGame\game\Interfaces\mainMenuInterface.lua ===
+--- MainMenuButtons module
+
+local Button = require("BaseClasses.button")
+local GameStateTransitions = require("src.gameStateTransitions")
+
+local BASE_BUTTON_WIDTH = 200
+local BASE_BUTTON_HEIGHT = 50
+local BASE_SPACING_Y = 60
+
+local function onStartGamePressed()
+	GameStateTransitions.EnterNewGame()
+end
+
+--- @class MainMenuInterface
+--- @field StartButton Button
+--- @field SettingsButton Button
+--- @field QuitButton Button
+local MainMenuInterface = {}
+MainMenuInterface.__index = MainMenuInterface
+
+--- Creates a new MainMenuInterface table.
+---@return MainMenuInterface
+function MainMenuInterface:new()
+	local newButtons = setmetatable({}, self)
+
+	local definitions = {
+		{ key = "StartButton",    name = "Start",    text = "Start Game", action = function() onStartGamePressed() end },
+		{ key = "SettingsButton", name = "Settings", text = "Settings" },
+		{ key = "QuitButton",     name = "Quit",     text = "Quit Game",  action = function() love.event.quit() end },
+	}
+
+	for index, definition in ipairs(definitions) do
+		newButtons[definition.key] = Button:new(
+			definition.name,
+			definition.action,
+			BASE_BUTTON_WIDTH,
+			BASE_BUTTON_HEIGHT,
+			definition.text,
+			{ X = 0, Y = 0 },
+			{ X = 0, Y = 15 }
+		)
+	end
+
+	newButtons:RebuildLayout()
+
+	return newButtons
+end
+
+--- Recomputes button positions based on current window size.
+function MainMenuInterface:RebuildLayout()
+	local width, height = love.graphics.getDimensions()
+	local scale = math.min(width / 1280, height / 720)
+	scale = math.max(0.75, math.min(1.6, scale))
+
+	local buttonWidth = math.floor(BASE_BUTTON_WIDTH * scale + 0.5)
+	local buttonHeight = math.floor(BASE_BUTTON_HEIGHT * scale + 0.5)
+	local spacingY = math.floor(BASE_SPACING_Y * scale + 0.5)
+
+	local startY = height / 2
+	local centerX = width / 2 - buttonWidth / 2
+	local textOffsetY = math.floor(buttonHeight * 0.3 + 0.5)
+
+	self.StartButton.Width = buttonWidth
+	self.StartButton.Height = buttonHeight
+	self.StartButton.PositionText.Y = textOffsetY
+
+	self.StartButton.PositionButton.X = centerX
+	self.StartButton.PositionButton.Y = startY
+
+	self.SettingsButton.Width = buttonWidth
+	self.SettingsButton.Height = buttonHeight
+	self.SettingsButton.PositionText.Y = textOffsetY
+
+	self.SettingsButton.PositionButton.X = centerX
+	self.SettingsButton.PositionButton.Y = startY + spacingY
+
+	self.QuitButton.Width = buttonWidth
+	self.QuitButton.Height = buttonHeight
+	self.QuitButton.PositionText.Y = textOffsetY
+
+	self.QuitButton.PositionButton.X = centerX
+	self.QuitButton.PositionButton.Y = startY + (2 * spacingY)
+end
+
+--- Draws all the Menu buttons
+function MainMenuInterface:Draw()
+	self.StartButton:Draw()
+	self.SettingsButton:Draw()
+	self.QuitButton:Draw()
+end
+
+--- Checks if any of the buttons are pressed based on the mouse position and cursor radius.
+--- if a button is pressed, its associated action will be executed.
+---@param PositionMouse {X: number, Y: number}
+---@param CursorRadius number
+---@return boolean True if any menu button was pressed, otherwise false.
+function MainMenuInterface:IsPressed(PositionMouse, CursorRadius)
+	if self.StartButton:IsPressed(PositionMouse, CursorRadius) then
+		return true
+	end
+	if self.SettingsButton:IsPressed(PositionMouse, CursorRadius) then
+		return true
+	end
+	if self.QuitButton:IsPressed(PositionMouse, CursorRadius) then
+		return true
+	end
+	return false
+end
+
+--- Handles a raw mouse press event for the menu.
+---@param x number
+---@param y number
+---@param button number
+---@return boolean True if a menu button handled the click.
+function MainMenuInterface:HandleMousePressed(x, y, button)
+	if button ~= 1 then
+		return false
+	end
+	return self:IsPressed({ X = x, Y = y }, 0)
+end
+
+
+return MainMenuInterface
+
+
+=== FILE: c:\Repositories\NewGame\game\Interfaces\pauseInterface.lua ===
+--- PauseInterface module
+
+local Button = require("BaseClasses.button")
+local Text = require("BaseClasses.text")
+local GameStateTransitions = require("src.gameStateTransitions")
+
+local BASE_BUTTON_WIDTH = 220
+local BASE_BUTTON_HEIGHT = 52
+local BASE_SPACING_Y = 64
+
+--- @class PauseInterface
+--- @field ResumeButton Button
+--- @field MenuButton Button
+--- @field QuitButton Button
+--- @field TitleText Text
+--- @field SubtitleText Text
+local PauseInterface = {}
+PauseInterface.__index = PauseInterface
+
+local function onResumePressed()
+	GameStateTransitions.EnterRunning()
+end
+
+local function onMenuPressed()
+	GameStateTransitions.EnterMenu()
+end
+
+--- Creates a new PauseInterface table.
+---@return PauseInterface
+function PauseInterface:new()
+	local pauseInterface = setmetatable({}, self)
+
+	local definitions = {
+		{ key = "ResumeButton", text = "Resume", action = function() onResumePressed() end },
+		{ key = "MenuButton", text = "Main Menu", action = function() onMenuPressed() end },
+		{ key = "QuitButton", text = "Quit Game", action = function() love.event.quit() end },
+	}
+
+	for _, definition in ipairs(definitions) do
+		pauseInterface[definition.key] = Button:new(
+			definition.key,
+			definition.action,
+			BASE_BUTTON_WIDTH,
+			BASE_BUTTON_HEIGHT,
+			definition.text,
+			{ X = 0, Y = 0 },
+			{ X = 0, Y = 15 }
+		)
+	end
+
+	pauseInterface.TitleText = Text:new("Paused", { X = 0, Y = 0 }, 0, "center", { 1, 1, 1, 1 })
+	pauseInterface.SubtitleText = Text:new("Press ESC to resume", { X = 0, Y = 0 }, 0, "center", { 1, 1, 1, 1 })
+
+	pauseInterface:RebuildLayout()
+	return pauseInterface
+end
+
+--- Recomputes button positions based on current window size.
+function PauseInterface:RebuildLayout()
+	local width, height = love.graphics.getDimensions()
+	local scale = math.min(width / 1280, height / 720)
+	scale = math.max(0.75, math.min(1.6, scale))
+
+	local buttonWidth = math.floor(BASE_BUTTON_WIDTH * scale + 0.5)
+	local buttonHeight = math.floor(BASE_BUTTON_HEIGHT * scale + 0.5)
+	local spacingY = math.floor(BASE_SPACING_Y * scale + 0.5)
+
+	local startY = height / 2 - spacingY
+	local centerX = width / 2 - buttonWidth / 2
+	local textOffsetY = math.floor(buttonHeight * 0.3 + 0.5)
+
+	self.ResumeButton.Width = buttonWidth
+	self.ResumeButton.Height = buttonHeight
+	self.ResumeButton.PositionText.Y = textOffsetY
+	self.ResumeButton.PositionButton.X = centerX
+	self.ResumeButton.PositionButton.Y = startY
+
+	self.MenuButton.Width = buttonWidth
+	self.MenuButton.Height = buttonHeight
+	self.MenuButton.PositionText.Y = textOffsetY
+	self.MenuButton.PositionButton.X = centerX
+	self.MenuButton.PositionButton.Y = startY + spacingY
+
+	self.QuitButton.Width = buttonWidth
+	self.QuitButton.Height = buttonHeight
+	self.QuitButton.PositionText.Y = textOffsetY
+	self.QuitButton.PositionButton.X = centerX
+	self.QuitButton.PositionButton.Y = startY + (2 * spacingY)
+
+	self.TitleText.Position.X = 0
+	self.TitleText.Position.Y = height / 2 - 130
+	self.TitleText.Width = width
+
+	self.SubtitleText.Position.X = 0
+	self.SubtitleText.Position.Y = height / 2 - 100
+	self.SubtitleText.Width = width
+end
+
+--- Draws pause overlay and buttons.
+function PauseInterface:Draw()
+	local width, height = love.graphics.getDimensions()
+	love.graphics.setColor(0, 0, 0, 0.35)
+	love.graphics.rectangle("fill", 0, 0, width, height)
+	self.TitleText:Draw()
+	self.SubtitleText:Draw()
+
+	self.ResumeButton:Draw()
+	self.MenuButton:Draw()
+	self.QuitButton:Draw()
+end
+
+--- Checks if any pause button is pressed.
+---@param PositionMouse {X: number, Y: number}
+---@param CursorRadius number
+---@return boolean
+function PauseInterface:IsPressed(PositionMouse, CursorRadius)
+	if self.ResumeButton:IsPressed(PositionMouse, CursorRadius) then
+		return true
+	end
+	if self.MenuButton:IsPressed(PositionMouse, CursorRadius) then
+		return true
+	end
+	if self.QuitButton:IsPressed(PositionMouse, CursorRadius) then
+		return true
+	end
+	return false
+end
+
+--- Handles a raw mouse press event for pause UI.
+---@param x number
+---@param y number
+---@param button number
+---@return boolean True if a pause button handled the click.
+function PauseInterface:HandleMousePressed(x, y, button)
+	if button ~= 1 then
+		return false
+	end
+	return self:IsPressed({ X = x, Y = y }, 0)
+end
+
+return PauseInterface
+
+
+=== FILE: c:\Repositories\NewGame\game\Interfaces\startInterface.lua ===
+--- StartInterface module
+
+local Text = require("BaseClasses.text")
+
+--- @class StartInterface
+--- @field TitleText Text
+--- @field PromptText Text
+local StartInterface = {}
+StartInterface.__index = StartInterface
+
+--- Creates a new StartInterface table.
+---@return StartInterface
+function StartInterface:new()
+	local startInterface = setmetatable({}, self)
+	startInterface.TitleText = Text:new("NewGame", { X = 0, Y = 0 }, 0, "center", { 1, 1, 1, 1 })
+	startInterface.PromptText = Text:new("Press enter to start the game.", { X = 0, Y = 0 }, 0, "center", { 1, 1, 1, 1 })
+	startInterface:RebuildLayout()
+	return startInterface
+end
+
+--- Recomputes text positions based on current window size.
+function StartInterface:RebuildLayout()
+	local width, height = love.graphics.getDimensions()
+	self.TitleText.Position.X = 0
+	self.TitleText.Position.Y = height / 2 - 56
+	self.TitleText.Width = width
+
+	self.PromptText.Position.X = 0
+	self.PromptText.Position.Y = height / 2
+	self.PromptText.Width = width
+end
+
+--- Draws start screen text.
+function StartInterface:Draw()
+	self.TitleText:Draw()
+	self.PromptText:Draw()
+end
+
+return StartInterface
+
+
+=== FILE: c:\Repositories\NewGame\game\Interfaces\combatOverlayInterface.lua ===
+--- CombatOverlayInterface draws health bars for units and key structures.
+
+---@class CombatOverlayInterface
+local CombatOverlayInterface = {}
+CombatOverlayInterface.__index = CombatOverlayInterface
+
+local BAR_WIDTH = 22
+local BAR_HEIGHT = 4
+local BAR_Y_OFFSET_UNIT = 12
+local BAR_Y_OFFSET_STRUCTURE = 10
+local BG_ALPHA = 0.7
+
+---@return CombatOverlayInterface
+function CombatOverlayInterface:new()
+	return setmetatable({}, self)
+end
+
+--- Safely returns a number, falling back to a default if the value is nil or not a number.
+---@param value number | nil
+---@param fallback number
+---@return number
+local function safeNumber(value, fallback)
+	if type(value) == "number" then
+		return value
+	end
+	return fallback
+end
+
+--- Draws a health bar.
+---@param x number
+---@param y number
+---@param width number
+---@param height number
+---@param ratio number
+---@param team "player" | "enemy" | nil
+local function drawBar(x, y, width, height, ratio, team)
+	love.graphics.setColor(0.08, 0.08, 0.08, BG_ALPHA)
+	love.graphics.rectangle("fill", x, y, width, height)
+
+	local clamped = math.max(0, math.min(1, ratio))
+	if team == "enemy" then
+		love.graphics.setColor(0.95, 0.28, 0.24, 0.95)
+	else
+		love.graphics.setColor(0.2, 0.9, 0.38, 0.95)
+	end
+	love.graphics.rectangle("fill", x + 1, y + 1, (width - 2) * clamped, height - 2)
+	love.graphics.setColor(1, 1, 1, 1)
+end
+
+--- Draws a health bar for a given entity.
+---@param entity Unit | Structure
+---@param maxHealth number
+---@param yOffset number
+local function drawEntityBar(entity, maxHealth, yOffset)
+	if not entity or not entity.Position then
+		return
+	end
+	if (entity.Health or 0) <= 0 then
+		return
+	end
+
+	local barX = entity.Position.X - (BAR_WIDTH * 0.5)
+	local barY = entity.Position.Y - yOffset
+	local ratio = (entity.Health or 0) / math.max(1, maxHealth)
+	drawBar(barX, barY, BAR_WIDTH, BAR_HEIGHT, ratio, entity.Team)
+end
+
+--- Draws all health bars for units and structures in the given world.
+---@param world World | nil
+function CombatOverlayInterface:Draw(world)
+	if not world or not world.Entities then
+		return
+	end
+
+	for _, unit in ipairs(world.Entities:GetUnits()) do
+		local maxHealth = safeNumber(unit.MaxHealth, safeNumber(unit.Health, 1))
+		drawEntityBar(unit, maxHealth, BAR_Y_OFFSET_UNIT + safeNumber(unit.Size, 8))
+	end
+
+	for _, structure in ipairs(world.Entities:GetStructures()) do
+		if structure.Name == "TownHall"
+			or structure.Name == "ArcherTower"
+			or structure.Name == "MageTower"
+			or structure.SpawnRate ~= nil then
+			local maxHealth = safeNumber(structure.MaxHealth, safeNumber(structure.Health, 1))
+			drawEntityBar(structure, maxHealth, BAR_Y_OFFSET_STRUCTURE + ((structure.Size or 0) * 0.5))
+		end
+	end
+end
+
+return CombatOverlayInterface
+
+
+=== FILE: c:\Repositories\NewGame\game\Objects\Structures\base\structure.lua ===
+--- Structure class representing a game structure with health, armor, and size attributes.
+
+local Object = require("BaseClasses.object")
+local DEFAULTS = {
+	Health = 100,
+	Armor = 5,
+	Size = 10,
+	Costs = { Gold = 0, Metal = 0, Aether = 0 },
+	IncomeBonusGold = 0,
+	IncomeBonusMetal = 0,
+}
+
+---@class Structure : Object
+---@field Health number
+---@field MaxHealth number
+---@field Armor number
+---@field Size number
+---@field Costs table
+---@field IncomeBonusGold number
+---@field IncomeBonusMetal number
+---@field IsStructure boolean
+---@field Team "player" | "enemy"
+---@field PathId string | nil
+---@field CurrentTarget Unit | Structure | nil
+---@field RetaliationTarget Unit | Structure | nil
+local Structure = {}
+Structure.__index = Structure
+
+setmetatable(Structure, { __index = Object })
+
+---Creates a new Structure.
+---@generic T : Structure
+---@param self T
+---@param Name string | nil
+---@param Health number | nil
+---@param Armor number | nil
+---@param Size number | nil
+---@param Costs table | nil
+---@param IncomeBonusGold number | nil
+---@param IncomeBonusMetal number | nil
+---@param Team "player" | "enemy" | nil
+---@return T
+function Structure:new(Name, Health, Armor, Size, Costs, IncomeBonusGold, IncomeBonusMetal, Team)
+	local newStructure = Object.new(self, Name)
+	newStructure.Health = Health or DEFAULTS.Health
+	newStructure.MaxHealth = newStructure.Health
+	newStructure.Armor = Armor or DEFAULTS.Armor
+	newStructure.Size = Size or DEFAULTS.Size
+	newStructure.Costs = Costs or DEFAULTS.Costs
+	newStructure.IncomeBonusGold = IncomeBonusGold or DEFAULTS.IncomeBonusGold
+	newStructure.IncomeBonusMetal = IncomeBonusMetal or DEFAULTS.IncomeBonusMetal
+	newStructure.IsStructure = true
+	newStructure.Team = Team or "player"
+	newStructure.PathId = nil
+	newStructure.CurrentTarget = nil
+	newStructure.RetaliationTarget = nil
+	return newStructure
+end
+
+--- Checks if the target is alive.
+---@param target Unit | Structure | nil
+---@return boolean
+function Structure:IsTargetAlive(target)
+	return target ~= nil and (target.Health or 0) > 0
+end
+
+--- Checks if the target is an enemy.
+---@param target Unit | Structure | nil
+---@return boolean
+function Structure:IsTargetEnemy(target)
+	return target ~= nil and target.Team ~= nil and target.Team ~= self.Team
+end
+
+--- Gets the radius of the target.
+---@param target Unit | Structure
+---@return number
+function Structure:GetTargetRadius(target)
+	if target.IsStructure == true then
+		return (target.Size or 0) / 2
+	end
+	return target.Size or 0
+end
+
+--- Checks if the target is within attack range.
+---@param target Unit | Structure
+---@return boolean
+function Structure:IsTargetInRange(target)
+	local dx = target.Position.X - self.Position.X
+	local dy = target.Position.Y - self.Position.Y
+	local distSq = dx * dx + dy * dy
+	local attackRange = rawget(self, "AttackRange") or 0
+	local range = attackRange + self:GetTargetRadius(target)
+	return distSq <= (range * range)
+end
+
+--- Checks if the target is within aggro range.
+---@param target Unit | Structure
+---@return boolean
+function Structure:IsTargetInAggroRange(target)
+	local dx = target.Position.X - self.Position.X
+	local dy = target.Position.Y - self.Position.Y
+	local distSq = dx * dx + dy * dy
+	local aggroRange = rawget(self, "AggroRange") or 0
+	local range = aggroRange + self:GetTargetRadius(target)
+	return distSq <= (range * range)
+end
+
+--- Searches for the closest enemy within aggro range.
+---@param entities WorldEntities
+---@return Unit | Structure | nil
+function Structure:SearchForEnemy(entities)
+	return entities:FindClosestEnemy(self, function(target)
+		return self:IsTargetInAggroRange(target)
+	end)
+end
+
+--- Searches for the closest enemy within attack range.
+---@param entities WorldEntities
+---@return Unit | Structure | nil
+function Structure:SearchForEnemyToAttack(entities)
+	return entities:FindClosestEnemy(self, function(target)
+		return self:IsTargetInRange(target)
+	end)
+end
+
+--- Checks if the structure can keep its current target.
+---@param target Unit | Structure | nil
+---@return boolean
+function Structure:CanKeepCurrentTarget(target)
+	if not target then
+		return false
+	end
+	if not self:IsTargetAlive(target) or not self:IsTargetEnemy(target) then
+		return false
+	end
+	return self:IsTargetInAggroRange(target)
+end
+
+--- Checks if the structure can keep its retaliation target.
+---@param target Unit | Structure | nil
+---@return boolean
+function Structure:CanKeepRetaliationTarget(target)
+	if not target then
+		return false
+	end
+	if not self:IsTargetAlive(target) or not self:IsTargetEnemy(target) then
+		return false
+	end
+	return self:IsTargetInRange(target)
+end
+
+--- Locks retaliation to the first valid attacker until that target becomes invalid.
+---@param attacker Unit | Structure | nil
+function Structure:OnDamaged(attacker)
+	if not attacker then
+		return
+	end
+	if not self:IsTargetEnemy(attacker) then
+		return
+	end
+	if self:CanKeepRetaliationTarget(self.RetaliationTarget) then
+		return
+	end
+	self.RetaliationTarget = attacker
+	self.CurrentTarget = attacker
+end
+
+--- Refreshes the current target of the structure.
+---@param entities WorldEntities
+---@return Unit | Structure | nil
+function Structure:RefreshTarget(entities)
+	if self:CanKeepCurrentTarget(self.CurrentTarget) then
+		return self.CurrentTarget
+	end
+	self.CurrentTarget = self:SearchForEnemy(entities)
+	return self.CurrentTarget
+end
+
+--- Updates the combat state of the structure.
+---@param dt number
+---@param entities WorldEntities
+function Structure:UpdateCombat(dt, entities)
+	local _ = dt
+	local _entities = entities
+	return
+end
+
+--- Spawns a unit if the spawn timer has reached the spawn rate.
+---@param dt number
+---@return Unit | nil
+function Structure:SpawnUnit(dt)
+	local _ = dt
+	return nil
+end
+
+--- Draws the structure at its current position.
+function Structure:Draw()
+	if self.Team == "enemy" then
+		love.graphics.setColor(0.8, 0.3, 0.2)
+	else
+		love.graphics.setColor(0.5, 0.5, 0.5)
+	end
+	love.graphics.rectangle("fill", self.Position.X - self.Size / 2, self.Position.Y - self.Size / 2, self.Size,
+		self.Size)
+	love.graphics.setColor(1, 1, 1)
+end
+
+return Structure
+
+
+=== FILE: c:\Repositories\NewGame\game\Objects\Structures\base\meleeStructure.lua ===
+--- MeleeStructure class for structures that attack in close range.
+
+local Structure = require("Objects.Structures.base.structure")
+
+local DEFAULTS = {
+	Damage = 0,
+	AttackRange = 0,
+	AttackSpeed = 1,
+}
+
+---@class MeleeStructure : Structure
+---@field Damage number
+---@field AttackRange number
+---@field AttackSpeed number
+---@field CurrentTarget Unit | Structure | nil
+local MeleeStructure = {}
+MeleeStructure.__index = MeleeStructure
+
+setmetatable(MeleeStructure, { __index = Structure })
+
+--- Creates a new melee structure.
+---@generic T : MeleeStructure
+---@param self T
+---@param Name string | nil
+---@param Health number | nil
+---@param Armor number | nil
+---@param Size number | nil
+---@param Damage number | nil
+---@param AttackRange number | nil
+---@param AttackSpeed number | nil
+---@param Costs table | nil
+---@param IncomeBonusGold number | nil
+---@param IncomeBonusMetal number | nil
+---@param Team "player" | "enemy" | nil
+---@return T
+function MeleeStructure:new(Name, Health, Armor, Size, Damage, AttackRange, AttackSpeed, Costs, IncomeBonusGold, IncomeBonusMetal, Team)
+	local newStructure = Structure.new(self, Name, Health, Armor, Size, Costs, IncomeBonusGold, IncomeBonusMetal, Team)
+	newStructure.Damage = Damage or DEFAULTS.Damage
+	newStructure.AttackRange = AttackRange or DEFAULTS.AttackRange
+	newStructure.AttackSpeed = AttackSpeed or DEFAULTS.AttackSpeed
+	newStructure.CurrentTarget = nil
+	return newStructure
+end
+
+--- Performs an attack on the target.
+---@param target Unit | Structure
+function MeleeStructure:PerformAttack(target)
+	local dmg = math.max(1, self.Damage - (target.Armor or 0))
+	target.Health = target.Health - dmg
+	if type(target.OnDamaged) == "function" then
+		target:OnDamaged(self)
+	end
+end
+
+--- Updates the combat state of the melee structure.
+---@param dt number
+---@param entities WorldEntities
+function MeleeStructure:UpdateCombat(dt, entities)
+	if self.Damage <= 0 or self.AttackRange <= 0 or self.AttackSpeed <= 0 then
+		return
+	end
+
+	self.AttackTimer = (self.AttackTimer or 0) + dt
+	if self.AttackTimer < self.AttackSpeed then
+		return
+	end
+
+	local target = self.CurrentTarget
+	if self:CanKeepRetaliationTarget(self.RetaliationTarget) then
+		target = self.RetaliationTarget
+		self.CurrentTarget = target
+	elseif not target or not self:IsTargetAlive(target) or not self:IsTargetEnemy(target) or not self:IsTargetInRange(target) then
+		self.RetaliationTarget = nil
+		target = self:SearchForEnemyToAttack(entities)
+		self.CurrentTarget = target
+	end
+
+	if not target then
+		return
+	end
+
+	self.AttackTimer = 0
+	self:PerformAttack(target)
+end
+
+return MeleeStructure
+
+
+=== FILE: c:\Repositories\NewGame\game\Objects\Structures\base\rangeStructure.lua ===
+--- RangeStructure class for structures that attack using projectiles.
+
+local Structure = require("Objects.Structures.base.structure")
+local Projectile = require("Objects.Projectiles.base.projectile")
+
+local DEFAULTS = {
+	Damage = 0,
+	AttackRange = 0,
+	AttackSpeed = 1,
+	ProjectileSpeed = 220,
+	ProjectileStyle = "orb",
+	SplashRadius = 0,
+	SplashDamageMultiplier = 0,
+}
+
+---@class RangeStructure : Structure
+---@field Damage number
+---@field AttackRange number
+---@field AttackSpeed number
+---@field CurrentTarget Unit | Structure | nil
+---@field ProjectileSpeed number
+---@field ProjectileRadius number
+---@field ProjectileStyle string
+---@field SplashRadius number
+---@field SplashDamageMultiplier number
+local RangeStructure = {}
+RangeStructure.__index = RangeStructure
+
+setmetatable(RangeStructure, { __index = Structure })
+
+--- Creates a new range structure.
+---@generic T : RangeStructure
+---@param self T
+---@param Name string | nil
+---@param Health number | nil
+---@param Armor number | nil
+---@param Size number | nil
+---@param Damage number | nil
+---@param AttackRange number | nil
+---@param AttackSpeed number | nil
+---@param ProjectileSpeed number | nil
+---@param ProjectileRadius number | nil
+---@param ProjectileStyle string | nil
+---@param SplashRadius number | nil
+---@param SplashDamageMultiplier number | nil
+---@param Costs table | nil
+---@param IncomeBonusGold number | nil
+---@param IncomeBonusMetal number | nil
+---@param Team "player" | "enemy" | nil
+---@return T
+function RangeStructure:new(Name, Health, Armor, Size, Damage, AttackRange, AttackSpeed, ProjectileSpeed, ProjectileRadius, ProjectileStyle, SplashRadius, SplashDamageMultiplier, Costs, IncomeBonusGold, IncomeBonusMetal, Team)
+	local newStructure = Structure.new(self, Name, Health, Armor, Size, Costs, IncomeBonusGold, IncomeBonusMetal, Team)
+	newStructure.Damage = Damage or DEFAULTS.Damage
+	newStructure.AttackRange = AttackRange or DEFAULTS.AttackRange
+	newStructure.AttackSpeed = AttackSpeed or DEFAULTS.AttackSpeed
+	newStructure.CurrentTarget = nil
+	newStructure.ProjectileSpeed = ProjectileSpeed or DEFAULTS.ProjectileSpeed
+	newStructure.ProjectileRadius = ProjectileRadius or math.max(2, (newStructure.Size or 10) * 0.2)
+	newStructure.ProjectileStyle = ProjectileStyle or DEFAULTS.ProjectileStyle
+	newStructure.SplashRadius = SplashRadius or DEFAULTS.SplashRadius
+	newStructure.SplashDamageMultiplier = SplashDamageMultiplier or DEFAULTS.SplashDamageMultiplier
+	return newStructure
+end
+
+--- Performs an attack on the target.
+---@param target Unit | Structure
+---@param entities WorldEntities
+function RangeStructure:PerformAttack(target, entities)
+	if not entities or type(entities.AddProjectile) ~= "function" then
+		return
+	end
+
+	local projectile = Projectile:new(
+		self.Position.X,
+		self.Position.Y,
+		target,
+		self,
+		self.ProjectileSpeed or DEFAULTS.ProjectileSpeed,
+		self.ProjectileRadius or math.max(2, self.Size * 0.2),
+		self.Damage,
+		self.SplashRadius or DEFAULTS.SplashRadius,
+		self.SplashDamageMultiplier or DEFAULTS.SplashDamageMultiplier,
+		self.ProjectileStyle or DEFAULTS.ProjectileStyle,
+		self.Team
+	)
+	entities:AddProjectile(projectile)
+end
+
+--- Updates the combat state of the range structure.
+---@param dt number
+---@param entities WorldEntities
+function RangeStructure:UpdateCombat(dt, entities)
+	if self.Damage <= 0 or self.AttackRange <= 0 or self.AttackSpeed <= 0 then
+		return
+	end
+
+	self.AttackTimer = (self.AttackTimer or 0) + dt
+	if self.AttackTimer < self.AttackSpeed then
+		return
+	end
+
+	local target = self.CurrentTarget
+	if self:CanKeepRetaliationTarget(self.RetaliationTarget) then
+		target = self.RetaliationTarget
+		self.CurrentTarget = target
+	elseif not target or not self:IsTargetAlive(target) or not self:IsTargetEnemy(target) or not self:IsTargetInRange(target) then
+		self.RetaliationTarget = nil
+		target = self:SearchForEnemyToAttack(entities)
+		self.CurrentTarget = target
+	end
+
+	if not target then
+		return
+	end
+
+	self.AttackTimer = 0
+	self:PerformAttack(target, entities)
+end
+
+return RangeStructure
+
+
+=== FILE: c:\Repositories\NewGame\game\Objects\Structures\base\spawningStructure.lua ===
+--- SpawningStructure class for structures that periodically spawn units.
+
+local Structure = require("Objects.Structures.base.structure")
+
+local DEFAULTS = {
+	SpawnRate = 5,
+	SpawnTimer = 0,
+}
+
+--- Normalizes a vector.
+---@param x number
+---@param y number
+---@return number, number
+local function normalizeVector(x, y)
+	local len = math.sqrt(x * x + y * y)
+	if len <= 0 then
+		return 0, 0
+	end
+	return x / len, y / len
+end
+
+--- Clamps a value between a minimum and maximum.
+---@param value number
+---@param minValue number
+---@param maxValue number
+---@return number
+local function clamp(value, minValue, maxValue)
+	if value < minValue then
+		return minValue
+	end
+	if value > maxValue then
+		return maxValue
+	end
+	return value
+end
+
+--- Resolves the forward direction for the spawning structure.
+---@param entities WorldEntities | nil
+---@param structure SpawningStructure
+---@return number, number
+local function resolveForwardDirection(entities, structure)
+	local fallbackX = (structure.Team == "enemy") and -1 or 1
+	local fallbackY = 0
+
+	if not entities or not entities.Map then
+		return fallbackX, fallbackY
+	end
+
+	---@type any
+	local map = entities.Map
+	local path = nil
+
+	if structure.PathId and type(map["GetPathById"]) == "function" then
+		path = map:GetPathById(structure.PathId)
+	end
+
+	if not path and type(map["GetClosestPathForTeam"]) == "function" then
+		path = map:GetClosestPathForTeam(structure.Position.X, structure.Position.Y, structure.Team)
+	end
+
+	if not path or type(path.GetClosestWaypointIndex) ~= "function" or type(path.GetWaypoint) ~= "function" or type(path.GetWaypoints) ~= "function" then
+		return fallbackX, fallbackY
+	end
+
+	local waypoints = path:GetWaypoints()
+	if not waypoints or #waypoints == 0 then
+		return fallbackX, fallbackY
+	end
+
+	local nearestIndex = path:GetClosestWaypointIndex(structure.Position.X, structure.Position.Y)
+	if not nearestIndex then
+		return fallbackX, fallbackY
+	end
+
+	nearestIndex = clamp(nearestIndex, 1, #waypoints)
+	local preferredStep = (structure.Team == "enemy") and -1 or 1
+	local targetIndex = clamp(nearestIndex + preferredStep, 1, #waypoints)
+	if targetIndex == nearestIndex then
+		targetIndex = clamp(nearestIndex - preferredStep, 1, #waypoints)
+	end
+
+	local targetWaypoint = path:GetWaypoint(targetIndex)
+	if not targetWaypoint then
+		targetWaypoint = path:GetWaypoint(nearestIndex)
+	end
+	if not targetWaypoint then
+		return fallbackX, fallbackY
+	end
+
+	local directionX = targetWaypoint.X - structure.Position.X
+	local directionY = targetWaypoint.Y - structure.Position.Y
+	local normalizedX, normalizedY = normalizeVector(directionX, directionY)
+	if normalizedX == 0 and normalizedY == 0 then
+		return fallbackX, fallbackY
+	end
+
+	return normalizedX, normalizedY
+end
+
+--- Builds the spawn candidates for the spawning structure.
+---@param structure SpawningStructure
+---@param unitRadius number
+---@param forwardX number
+---@param forwardY number
+---@return table
+local function buildSpawnCandidates(structure, unitRadius, forwardX, forwardY)
+	local spawnOffset = (structure.Size / 2) + unitRadius + 1
+	local lateralAX, lateralAY = -forwardY, forwardX
+	local lateralBX, lateralBY = forwardY, -forwardX
+	local backX, backY = -forwardX, -forwardY
+	local centerX = structure.Position.X
+	local centerY = structure.Position.Y
+	local sideOffset = spawnOffset * 0.9
+	local diagonalOffset = spawnOffset * 0.72
+	local wideOffset = spawnOffset * 1.25
+
+	return {
+		{ X = centerX + (forwardX * spawnOffset), Y = centerY + (forwardY * spawnOffset) },
+		{
+			X = centerX + ((forwardX + lateralAX * 0.65) * diagonalOffset),
+			Y = centerY + ((forwardY + lateralAY * 0.65) * diagonalOffset),
+		},
+		{
+			X = centerX + ((forwardX + lateralBX * 0.65) * diagonalOffset),
+			Y = centerY + ((forwardY + lateralBY * 0.65) * diagonalOffset),
+		},
+		{ X = centerX + (lateralAX * sideOffset), Y = centerY + (lateralAY * sideOffset) },
+		{ X = centerX + (lateralBX * sideOffset), Y = centerY + (lateralBY * sideOffset) },
+		{
+			X = centerX + ((backX + lateralAX * 0.45) * diagonalOffset),
+			Y = centerY + ((backY + lateralAY * 0.45) * diagonalOffset),
+		},
+		{
+			X = centerX + ((backX + lateralBX * 0.45) * diagonalOffset),
+			Y = centerY + ((backY + lateralBY * 0.45) * diagonalOffset),
+		},
+		{ X = centerX + (forwardX * wideOffset), Y = centerY + (forwardY * wideOffset) },
+	}
+end
+
+--- Finds a suitable spawn position for a unit.
+---@param entities WorldEntities | nil
+---@param structure SpawningStructure
+---@param unitRadius number
+---@return number | nil, number | nil
+local function findSpawnPosition(entities, structure, unitRadius)
+	local forwardX, forwardY = resolveForwardDirection(entities, structure)
+	local candidates = buildSpawnCandidates(structure, unitRadius, forwardX, forwardY)
+
+	for _, candidate in ipairs(candidates) do
+		local canSpawn = true
+		if entities and type(entities.CanSpawnUnitAt) == "function" then
+			canSpawn = entities:CanSpawnUnitAt(candidate.X, candidate.Y, unitRadius)
+		end
+		if canSpawn then
+			return candidate.X, candidate.Y
+		end
+	end
+
+	return nil, nil
+end
+
+---@class SpawningStructure : Structure
+---@field SpawnRate number
+---@field SpawnTimer number
+---@field UnitClass table | nil
+---@field IsSpawningStructure boolean
+local SpawningStructure = {}
+SpawningStructure.__index = SpawningStructure
+
+setmetatable(SpawningStructure, { __index = Structure })
+
+--- Creates a new spawning structure.
+---@generic T : SpawningStructure
+---@param self T
+---@param Name string | nil
+---@param Health number | nil
+---@param Armor number | nil
+---@param Size number | nil
+---@param SpawnRate number | nil
+---@param UnitClass table | nil
+---@param Costs table | nil
+---@param IncomeBonusGold number | nil
+---@param IncomeBonusMetal number | nil
+---@param SpawnTimer number | nil
+---@param Team "player" | "enemy" | nil
+---@return T
+function SpawningStructure:new(Name, Health, Armor, Size, SpawnRate, UnitClass, Costs, IncomeBonusGold, IncomeBonusMetal, SpawnTimer, Team)
+	local newStructure = Structure.new(self, Name, Health, Armor, Size, Costs, IncomeBonusGold, IncomeBonusMetal,
+		Team)
+	newStructure.SpawnRate = SpawnRate or DEFAULTS.SpawnRate
+	newStructure.SpawnTimer = SpawnTimer or DEFAULTS.SpawnTimer
+	newStructure.UnitClass = UnitClass
+	return newStructure
+end
+
+--- Spawns a unit if the spawn timer has reached the spawn rate.
+---@param dt number
+---@param entities WorldEntities | nil
+---@return Unit | nil
+function SpawningStructure:SpawnUnit(dt, entities)
+	if self.SpawnRate <= 0 then
+		return nil
+	end
+	if not self.UnitClass then
+		return nil
+	end
+
+	self.SpawnTimer = self.SpawnTimer + dt
+	if self.SpawnTimer >= self.SpawnRate then
+		self.SpawnTimer = self.SpawnTimer - self.SpawnRate
+		local spawnedUnit = self.UnitClass:new(self.Name .. "_Unit")
+		spawnedUnit.Team = self.Team
+		spawnedUnit.PathId = self.PathId
+		spawnedUnit.PathWaypointIndex = nil
+		local spawnX, spawnY = findSpawnPosition(entities, self, spawnedUnit.Size)
+		if not spawnX or not spawnY then
+			return nil
+		end
+
+		spawnedUnit:Place({ X = spawnX, Y = spawnY })
+		return spawnedUnit
+	end
+	return nil
+end
+
+return SpawningStructure
+
+
+=== FILE: c:\Repositories\NewGame\game\Objects\Units\base\unit.lua ===
+--- Unit class representing a game unit with health, damage, armor, speed, size, aggro range, attack range, and attack speed attributes.
+
+local Object = require("BaseClasses.object")
+local NavigationSystem = require("src.navigationSystem")
+local SteeringSystem = require("src.steeringSystem")
+
+local DEFAULTS = {
+	Health = 100,
+	Damage = 10,
+	Armor = 5,
+	Speed = 2,
+	Size = 10,
+	AttackRange = 50,
+	AggroRange = 120,
+	AttackSpeed = 1,
+}
+
+--- Description of function distanceSquared.
+---@param x1 number
+---@param y1 number
+---@param x2 number
+---@param y2 number
+---@return number
+local function distanceSquared(x1, y1, x2, y2)
+	local dx = x2 - x1
+	local dy = y2 - y1
+	return dx * dx + dy * dy
+end
+
+---@class Unit : Object
+---@field Health number
+---@field MaxHealth number
+---@field Damage number
+---@field Armor number
+---@field Speed number
+---@field Size number
+---@field AttackRange number
+---@field AggroRange number
+---@field AttackSpeed number
+---@field Team "player" | "enemy"
+---@field PathId string | nil
+---@field PathWaypointIndex number | nil
+---@field HadAggroTarget boolean
+---@field CurrentTarget Unit | Structure | nil
+---@field RetaliationTarget Unit | Structure | nil
+local Unit = {}
+Unit.__index = Unit
+
+setmetatable(Unit, { __index = Object })
+
+---Creates a new Unit.
+---@generic T : Unit
+---@param self T
+---@param Name string | nil
+---@param Health number | nil
+---@param Damage number | nil
+---@param Armor number | nil
+---@param Speed number | nil
+---@param Size number | nil
+---@param AttackRange number | nil
+---@param AggroRange number | nil
+---@param AttackSpeed number | nil
+---@param Team "player" | "enemy" | nil
+---@return T
+function Unit:new(Name, Health, Damage, Armor, Speed, Size, AttackRange, AggroRange, AttackSpeed, Team)
+	local newUnit = Object.new(self, Name)
+	newUnit.Health = Health or DEFAULTS.Health
+	newUnit.MaxHealth = newUnit.Health
+	newUnit.Damage = Damage or DEFAULTS.Damage
+	newUnit.Armor = Armor or DEFAULTS.Armor
+	newUnit.Speed = Speed or DEFAULTS.Speed
+	newUnit.Size = Size or DEFAULTS.Size
+	newUnit.AttackRange = AttackRange or DEFAULTS.AttackRange
+	newUnit.AggroRange = AggroRange or DEFAULTS.AggroRange
+	newUnit.AttackSpeed = AttackSpeed or DEFAULTS.AttackSpeed
+	newUnit.Team = Team or "player"
+	newUnit.PathId = nil
+	newUnit.PathWaypointIndex = nil
+	newUnit.HadAggroTarget = false
+	newUnit.CurrentTarget = nil
+	newUnit.RetaliationTarget = nil
+	return newUnit
+end
+
+--- Checks if the target can be kept as the retaliation target.
+---@param target Unit | Structure | nil
+---@return boolean
+function Unit:CanKeepRetaliationTarget(target)
+	if not target then
+		return false
+	end
+	if not self:IsTargetAlive(target) or not self:IsTargetEnemy(target) then
+		return false
+	end
+	return true
+end
+
+--- Locks retaliation to the first valid attacker until that target is no longer valid.
+---@param attacker Unit | Structure | nil
+function Unit:OnDamaged(attacker)
+	if not attacker then
+		return
+	end
+	if not self:IsTargetEnemy(attacker) then
+		return
+	end
+	if self:CanKeepRetaliationTarget(self.RetaliationTarget) then
+		return
+	end
+	self.RetaliationTarget = attacker
+	self.CurrentTarget = attacker
+end
+
+--- Checks if the target is alive.
+---@param target Unit | Structure | nil
+---@return boolean
+function Unit:IsTargetAlive(target)
+	return target ~= nil and (target.Health or 0) > 0
+end
+
+--- Checks if the target is an enemy.
+---@param target Unit | Structure | nil
+---@return boolean
+function Unit:IsTargetEnemy(target)
+	return target ~= nil and target.Team ~= nil and target.Team ~= self.Team
+end
+
+--- Returns the next position for the given direction without applying it.
+---@param direction "up" | "down" | "left" | "right"
+---@return number, number
+function Unit:GetNextPosition(direction)
+	local nextX = self.Position.X
+	local nextY = self.Position.Y
+
+	if direction == "up" then
+		nextY = nextY - self.Speed
+	elseif direction == "down" then
+		nextY = nextY + self.Speed
+	elseif direction == "left" then
+		nextX = nextX - self.Speed
+	elseif direction == "right" then
+		nextX = nextX + self.Speed
+	end
+
+	return nextX, nextY
+end
+
+--- Moves the unit to an absolute position.
+---@param x number
+---@param y number
+function Unit:MoveTo(x, y)
+	self.Position.X = x
+	self.Position.Y = y
+	self:UpdateHealthFromWindowBounds()
+end
+
+--- Sets Health to 0 when the unit leaves the current window.
+function Unit:UpdateHealthFromWindowBounds()
+	local width, height = love.graphics.getDimensions()
+	if self.Position.X < 0 or self.Position.X > width or self.Position.Y < 0 or self.Position.Y > height then
+		self.Health = 0
+	end
+end
+
+--- Returns target radius used for range checks.
+---@param target Unit | Structure
+---@return number
+function Unit:GetTargetRadius(target)
+	if target.IsStructure == true then
+		return (target.Size or 0) / 2
+	end
+	return target.Size or 0
+end
+
+--- Returns true when target is inside attack range.
+---@param target Unit | Structure
+---@return boolean
+function Unit:IsTargetInRange(target)
+	local distSq = distanceSquared(self.Position.X, self.Position.Y, target.Position.X, target.Position.Y)
+	local range = self.AttackRange + self:GetTargetRadius(target)
+	return distSq <= (range * range)
+end
+
+--- Returns true when target is inside aggro range.
+---@param target Unit | Structure
+---@return boolean
+function Unit:IsTargetInAggroRange(target)
+	local distSq = distanceSquared(self.Position.X, self.Position.Y, target.Position.X, target.Position.Y)
+	local range = self.AggroRange + self:GetTargetRadius(target)
+	return distSq <= (range * range)
+end
+
+--- Searches for the closest enemy unit or structure within aggro range.
+---@param entities WorldEntities
+---@return Unit | Structure | nil
+function Unit:SearchForEnemy(entities)
+	return entities:FindClosestEnemy(self, function(target)
+		return self:IsTargetInAggroRange(target)
+	end)
+end
+
+--- Searches for the closest enemy unit or structure within attack range.
+---@param entities WorldEntities
+---@return Unit | Structure | nil
+function Unit:SearchForEnemyToAttack(entities)
+	return entities:FindClosestEnemy(self, function(target)
+		return self:IsTargetInRange(target)
+	end)
+end
+
+--- Returns the enemy TownHall if one exists.
+---@param entities WorldEntities
+---@return Structure | nil
+function Unit:GetEnemyTownHall(entities)
+	return entities:GetEnemyTownHall(self.Team)
+end
+
+--- Returns true when a target can be kept as the current target.
+---@param target Unit | Structure | nil
+---@return boolean
+function Unit:CanKeepCurrentTarget(target)
+	local checkedTarget = target
+	if not checkedTarget then
+		return false
+	end
+
+	if not self:IsTargetAlive(checkedTarget) or not self:IsTargetEnemy(checkedTarget) then
+		return false
+	end
+	if checkedTarget.Name == "TownHall" then
+		return true
+	end
+	return self:IsTargetInAggroRange(checkedTarget)
+end
+
+--- Refreshes and returns the unit's current target.
+---@param entities WorldEntities
+---@return Unit | Structure | nil
+function Unit:RefreshTarget(entities)
+	if self:CanKeepRetaliationTarget(self.RetaliationTarget) then
+		self.CurrentTarget = self.RetaliationTarget
+		return self.CurrentTarget
+	end
+	self.RetaliationTarget = nil
+
+	if self:CanKeepCurrentTarget(self.CurrentTarget) then
+		return self.CurrentTarget
+	end
+
+	local aggroTarget = self:SearchForEnemy(entities)
+	if aggroTarget then
+		self.CurrentTarget = aggroTarget
+		return aggroTarget
+	end
+
+	-- Keep lane/path movement active when no nearby enemy is in aggro range.
+	self.CurrentTarget = nil
+	return self.CurrentTarget
+end
+
+--- Executes the unit-specific attack behavior.
+--- Base Unit is abstract for attack execution and must be specialized.
+---@param target Unit | Structure
+---@param entities WorldEntities
+function Unit:PerformAttack(target, entities)
+	error("Unit:PerformAttack must be implemented by a subclass")
+end
+
+--- Returns the next desired position based on aggro and attack ranges.
+---@param entities WorldEntities
+---@return number, number
+function Unit:CalculateNextPosition(entities)
+	local aggroTarget = self:RefreshTarget(entities)
+	local hasAggroTarget = aggroTarget ~= nil
+	if self.HadAggroTarget and not hasAggroTarget then
+		self.PathId = nil
+		self.PathWaypointIndex = nil
+	end
+	self.HadAggroTarget = hasAggroTarget
+
+	local targetX, targetY = nil, nil
+
+	if aggroTarget and self:IsTargetInRange(aggroTarget) then
+		return self.Position.X, self.Position.Y
+	elseif aggroTarget then
+		targetX = aggroTarget.Position.X
+		targetY = aggroTarget.Position.Y
+	else
+		targetX, targetY = NavigationSystem.GetPathTargetPoint(self, entities)
+		if not targetX or not targetY then
+			local fallbackDirection = (self.Team == "enemy") and "left" or "right"
+			targetX, targetY = self:GetNextPosition(fallbackDirection)
+		end
+	end
+
+	return SteeringSystem.GetNextPosition(self, entities, targetX, targetY)
+end
+
+--- Updates attack cooldown and attacks enemies in attack range.
+---@param dt number
+---@param entities WorldEntities
+function Unit:UpdateCombat(dt, entities)
+	self.AttackTimer = (self.AttackTimer or 0) + dt
+	if self.AttackTimer < self.AttackSpeed then
+		return
+	end
+
+	local target = self:RefreshTarget(entities)
+	if target and not self:IsTargetInRange(target) then
+		if self:CanKeepRetaliationTarget(self.RetaliationTarget) then
+			return
+		end
+		target = self:SearchForEnemyToAttack(entities)
+		if target then
+			self.CurrentTarget = target
+		end
+	end
+
+	if not target then
+		return
+	end
+
+	self.AttackTimer = 0
+	self:PerformAttack(target, entities)
+end
+
+--- Draws the unit at its current position.
+function Unit:Draw()
+	if self.Team == "enemy" then
+		love.graphics.setColor(1, 0.2, 0.2)
+	else
+		love.graphics.setColor(0, 1, 0)
+	end
+
+	love.graphics.circle("fill", self.Position.X, self.Position.Y, self.Size)
+
+	love.graphics.setColor(1, 1, 1)
+end
+
+return Unit
+
+
+=== FILE: c:\Repositories\NewGame\game\Objects\Units\base\meleeUnit.lua ===
+--- MeleeUnit base class for direct-hit attacks.
+
+local Unit = require("Objects.Units.base.unit")
+
+---@class MeleeUnit : Unit
+local MeleeUnit = {}
+MeleeUnit.__index = MeleeUnit
+
+setmetatable(MeleeUnit, { __index = Unit })
+
+--- Executes a melee hit immediately on the target.
+---@param target Unit | Structure
+---@param entities WorldEntities
+function MeleeUnit:PerformAttack(target, entities)
+	local _ = entities
+	local dmg = math.max(1, self.Damage - (target.Armor or 0))
+	target.Health = target.Health - dmg
+	if type(target.OnDamaged) == "function" then
+		target:OnDamaged(self)
+	end
+end
+
+return MeleeUnit
+
+
+=== FILE: c:\Repositories\NewGame\game\Objects\Units\base\rangedUnit.lua ===
+--- RangedUnit base class for ranged attack behavior.
+
+local Unit = require("Objects.Units.base.unit")
+local Projectile = require("Objects.Projectiles.base.projectile")
+
+---@class RangedUnit : Unit
+---@field ProjectileSpeed number | nil
+---@field ProjectileRadius number | nil
+---@field SplashRadius number | nil
+---@field SplashDamageMultiplier number | nil
+---@field ProjectileStyle string | nil
+local RangedUnit = {}
+RangedUnit.__index = RangedUnit
+
+setmetatable(RangedUnit, { __index = Unit })
+
+--- Executes ranged attack behavior.
+---@param target Unit | Structure
+---@param entities WorldEntities
+function RangedUnit:PerformAttack(target, entities)
+	if not entities or type(entities.AddProjectile) ~= "function" then
+		return
+	end
+
+	local projectileSpeed = self.ProjectileSpeed or 230
+	local projectileRadius = self.ProjectileRadius or math.max(2, self.Size * 0.3)
+	local projectile = Projectile:new(
+		self.Position.X,
+		self.Position.Y,
+		target,
+		self,
+		projectileSpeed,
+		projectileRadius,
+		self.Damage,
+		self.SplashRadius,
+		self.SplashDamageMultiplier,
+		self.ProjectileStyle,
+		self.Team
+	)
+	entities:AddProjectile(projectile)
+end
+
+return RangedUnit
+
+
+=== FILE: c:\Repositories\NewGame\game\Objects\Structures\placement\structurePlacement.lua ===
+local StructurePlacement = {}
+
+--- Returns true if structureClass has the required placement shape.
+---@param structureClass table
+---@return boolean
+local function isValidStructureClass(structureClass)
+	if type(structureClass) ~= "table" then
+		return false
+	end
+	if type(structureClass.new) ~= "function" then
+		return false
+	end
+	if type(structureClass.Size) ~= "number" or structureClass.Size <= 0 then
+		return false
+	end
+	if type(structureClass.Costs) ~= "table" then
+		return false
+	end
+	return true
+end
+
+--- Checks whether the structure center/footprint is on the allowed team half.
+---@param entities WorldEntities | nil
+---@param x number
+---@param size number
+---@param team "player" | "enemy"
+---@return boolean
+local function isOnAllowedTeamSide(entities, x, size, team)
+	local boundsX = 0
+	local width = love.graphics.getWidth()
+	if entities and type(entities.GetWorldBounds) == "function" then
+		boundsX, _, width = entities:GetWorldBounds()
+	end
+	local middleX = boundsX + (width / 2)
+	local halfSize = size / 2
+
+	if team == "enemy" then
+		return (x - halfSize) >= middleX
+	end
+
+	return (x + halfSize) <= middleX
+end
+
+--- Places a structure of the given class at the given position.
+--- Returns nil if the class is unknown or the player cannot afford it or the position is invalid.
+---@param structureClass table | nil
+---@param resources Resources
+---@param entities WorldEntities
+---@param x number
+---@param y number
+---@param team "player" | "enemy"
+---@return Structure | nil The placed structure if successful, otherwise nil.
+---@return string | nil reason Failure reason code when placement fails.
+function StructurePlacement.PlaceStructure(structureClass, resources, entities, x, y, team)
+	local requestedTeam = team or "player"
+
+	if not structureClass then
+		return nil, "invalid_type"
+	end
+
+	if not isValidStructureClass(structureClass) then
+		return nil, "invalid_class"
+	end
+
+	if not resources or type(resources.Spend) ~= "function" then
+		return nil, "invalid_resources"
+	end
+
+	if not isOnAllowedTeamSide(entities, x, structureClass.Size, requestedTeam) then
+		return nil, "wrong_side"
+	end
+
+	local canPlace, placementReason = entities:CanPlaceStructureAt(x, y, structureClass.Size)
+	if not canPlace then
+		return nil, placementReason
+	end
+
+	if not resources:Spend(structureClass.Costs) then
+		return nil, "not_affordable"
+	end
+
+	local structure = structureClass:new()
+	structure:Place({ X = x, Y = y })
+	structure.Team = requestedTeam
+
+	if structure.Team == "player" and type(resources.AddIncomeBonus) == "function" then
+		resources:AddIncomeBonus(structure.IncomeBonusGold, structure.IncomeBonusMetal)
+	end
+
+	return structure, nil
+end
+
+return StructurePlacement
+
+
+=== FILE: c:\Repositories\NewGame\game\Objects\Structures\registry\structureRegistry.lua ===
+--- Registry for resolving structure type identifiers to concrete classes.
+
+local StructureRegistry = {}
+
+local STRUCTURE_CLASS_BY_TYPE = {
+	TownHall      = require("Objects.Structures.DefenseStructures.townhall"),
+	ArcherTower   = require("Objects.Structures.DefenseStructures.archertower"),
+	MageTower     = require("Objects.Structures.DefenseStructures.magetower"),
+	Barracks      = require("Objects.Structures.SpawnStructures.barracks"),
+	BarbarianCamp = require("Objects.Structures.SpawnStructures.barbariancamp"),
+	ArcherCamp    = require("Objects.Structures.SpawnStructures.archercamp"),
+	Library       = require("Objects.Structures.SpawnStructures.library"),
+}
+
+
+--- Returns the structure class for the given type id.
+---@param structureType string | nil
+---@return table | nil
+function StructureRegistry.GetByType(structureType)
+	if type(structureType) ~= "string" or structureType == "" then
+		return nil
+	end
+	return STRUCTURE_CLASS_BY_TYPE[structureType]
+end
+
+return StructureRegistry
+
+
+=== FILE: c:\Repositories\NewGame\game\Objects\Units\registry\unitRegistry.lua ===
+--- Registry for resolving unit type identifiers to concrete classes.
+
+local UnitRegistry = {}
+
+local UNIT_CLASS_BY_TYPE = {
+	Barbarian = require("Objects.Units.types.barbarian"),
+	Knight = require("Objects.Units.types.knight"),
+	Archer = require("Objects.Units.types.archer"),
+	Mage = require("Objects.Units.types.mage"),
+}
+
+--- Returns the unit class for the given type id.
+---@param unitType string | nil
+---@return table | nil
+function UnitRegistry.GetByType(unitType)
+	if type(unitType) ~= "string" or unitType == "" then
+		return nil
+	end
+	return UNIT_CLASS_BY_TYPE[unitType]
+end
+
+return UnitRegistry
+
+
+

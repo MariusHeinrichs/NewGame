@@ -93,14 +93,4 @@ function Resources:Spend(costs)
 	return true
 end
 
---- Returns true if the player can afford the given cost.
----@param costs table
----@return boolean
-function Resources:CanAfford(costs)
-	costs = costs or {}
-	return self.Gold >= (costs.Gold or 0)
-		and self.Metal >= (costs.Metal or 0)
-		and self.Aether >= (costs.Aether or 0)
-end
-
 return Resources

@@ -3,6 +3,7 @@
 local Object = require("BaseClasses.object")
 local NavigationSystem = require("src.navigationSystem")
 local SteeringSystem = require("src.steeringSystem")
+local TargetingSystem = require("src.targetingSystem")
 
 local DEFAULTS = {
 	Health = 100,
@@ -14,18 +15,6 @@ local DEFAULTS = {
 	AggroRange = 120,
 	AttackSpeed = 1,
 }
-
---- Description of function distanceSquared.
----@param x1 number
----@param y1 number
----@param x2 number
----@param y2 number
----@return number
-local function distanceSquared(x1, y1, x2, y2)
-	local dx = x2 - x1
-	local dy = y2 - y1
-	return dx * dx + dy * dy
-end
 
 ---@class Unit : Object
 ---@field Health number
@@ -86,43 +75,27 @@ end
 ---@param target Unit | Structure | nil
 ---@return boolean
 function Unit:CanKeepRetaliationTarget(target)
-	if not target then
-		return false
-	end
-	if not self:IsTargetAlive(target) or not self:IsTargetEnemy(target) then
-		return false
-	end
-	return true
+	return TargetingSystem.CanKeepTarget(self, target, { range = math.huge })
 end
 
 --- Locks retaliation to the first valid attacker until that target is no longer valid.
 ---@param attacker Unit | Structure | nil
 function Unit:OnDamaged(attacker)
-	if not attacker then
-		return
-	end
-	if not self:IsTargetEnemy(attacker) then
-		return
-	end
-	if self:CanKeepRetaliationTarget(self.RetaliationTarget) then
-		return
-	end
-	self.RetaliationTarget = attacker
-	self.CurrentTarget = attacker
+	TargetingSystem.OnDamaged(self, attacker, Unit.CanKeepRetaliationTarget)
 end
 
 --- Checks if the target is alive.
 ---@param target Unit | Structure | nil
 ---@return boolean
 function Unit:IsTargetAlive(target)
-	return target ~= nil and (target.Health or 0) > 0
+	return TargetingSystem.IsTargetAlive(target)
 end
 
 --- Checks if the target is an enemy.
 ---@param target Unit | Structure | nil
 ---@return boolean
 function Unit:IsTargetEnemy(target)
-	return target ~= nil and target.Team ~= nil and target.Team ~= self.Team
+	return TargetingSystem.IsTargetEnemy(self, target)
 end
 
 --- Returns the next position for the given direction without applying it.
@@ -166,35 +139,28 @@ end
 ---@param target Unit | Structure
 ---@return number
 function Unit:GetTargetRadius(target)
-	if target.IsStructure == true then
-		return (target.Size or 0) / 2
-	end
-	return target.Size or 0
+	return TargetingSystem.GetTargetRadius(target)
 end
 
 --- Returns true when target is inside attack range.
 ---@param target Unit | Structure
 ---@return boolean
 function Unit:IsTargetInRange(target)
-	local distSq = distanceSquared(self.Position.X, self.Position.Y, target.Position.X, target.Position.Y)
-	local range = self.AttackRange + self:GetTargetRadius(target)
-	return distSq <= (range * range)
+	return TargetingSystem.IsTargetWithinRange(self, target, self.AttackRange)
 end
 
 --- Returns true when target is inside aggro range.
 ---@param target Unit | Structure
 ---@return boolean
 function Unit:IsTargetInAggroRange(target)
-	local distSq = distanceSquared(self.Position.X, self.Position.Y, target.Position.X, target.Position.Y)
-	local range = self.AggroRange + self:GetTargetRadius(target)
-	return distSq <= (range * range)
+	return TargetingSystem.IsTargetWithinRange(self, target, self.AggroRange)
 end
 
 --- Searches for the closest enemy unit or structure within aggro range.
 ---@param entities WorldEntities
 ---@return Unit | Structure | nil
 function Unit:SearchForEnemy(entities)
-	return entities:FindClosestEnemy(self, function(target)
+	return TargetingSystem.SearchForEnemy(self, entities, function(target)
 		return self:IsTargetInAggroRange(target)
 	end)
 end
@@ -203,7 +169,7 @@ end
 ---@param entities WorldEntities
 ---@return Unit | Structure | nil
 function Unit:SearchForEnemyToAttack(entities)
-	return entities:FindClosestEnemy(self, function(target)
+	return TargetingSystem.SearchForEnemy(self, entities, function(target)
 		return self:IsTargetInRange(target)
 	end)
 end
@@ -219,43 +185,23 @@ end
 ---@param target Unit | Structure | nil
 ---@return boolean
 function Unit:CanKeepCurrentTarget(target)
-	local checkedTarget = target
-	if not checkedTarget then
-		return false
-	end
-
-	if not self:IsTargetAlive(checkedTarget) or not self:IsTargetEnemy(checkedTarget) then
-		return false
-	end
-	if checkedTarget.Name == "TownHall" then
-		return true
-	end
-	return self:IsTargetInAggroRange(checkedTarget)
+	return TargetingSystem.CanKeepTarget(self, target, {
+		range = self.AggroRange,
+		allowTownHall = true,
+	})
 end
 
 --- Refreshes and returns the unit's current target.
 ---@param entities WorldEntities
 ---@return Unit | Structure | nil
 function Unit:RefreshTarget(entities)
-	if self:CanKeepRetaliationTarget(self.RetaliationTarget) then
-		self.CurrentTarget = self.RetaliationTarget
-		return self.CurrentTarget
-	end
-	self.RetaliationTarget = nil
-
-	if self:CanKeepCurrentTarget(self.CurrentTarget) then
-		return self.CurrentTarget
-	end
-
-	local aggroTarget = self:SearchForEnemy(entities)
-	if aggroTarget then
-		self.CurrentTarget = aggroTarget
-		return aggroTarget
-	end
-
-	-- Keep lane/path movement active when no nearby enemy is in aggro range.
-	self.CurrentTarget = nil
-	return self.CurrentTarget
+	return TargetingSystem.RefreshTarget(self, entities, {
+		canKeepCurrentTarget = Unit.CanKeepCurrentTarget,
+		searchForEnemy = Unit.SearchForEnemy,
+		canKeepRetaliationTarget = Unit.CanKeepRetaliationTarget,
+		clearRetaliationWhenInvalid = true,
+		preferRetaliation = true,
+	})
 end
 
 --- Executes the unit-specific attack behavior.

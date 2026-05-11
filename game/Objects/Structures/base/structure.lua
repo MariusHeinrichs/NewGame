@@ -1,6 +1,7 @@
 --- Structure class representing a game structure with health, armor, and size attributes.
 
 local Object = require("BaseClasses.object")
+local TargetingSystem = require("src.targetingSystem")
 local DEFAULTS = {
 	Health = 100,
 	Armor = 5,
@@ -61,55 +62,42 @@ end
 ---@param target Unit | Structure | nil
 ---@return boolean
 function Structure:IsTargetAlive(target)
-	return target ~= nil and (target.Health or 0) > 0
+	return TargetingSystem.IsTargetAlive(target)
 end
 
 --- Checks if the target is an enemy.
 ---@param target Unit | Structure | nil
 ---@return boolean
 function Structure:IsTargetEnemy(target)
-	return target ~= nil and target.Team ~= nil and target.Team ~= self.Team
+	return TargetingSystem.IsTargetEnemy(self, target)
 end
 
 --- Gets the radius of the target.
 ---@param target Unit | Structure
 ---@return number
 function Structure:GetTargetRadius(target)
-	if target.IsStructure == true then
-		return (target.Size or 0) / 2
-	end
-	return target.Size or 0
+	return TargetingSystem.GetTargetRadius(target)
 end
 
 --- Checks if the target is within attack range.
 ---@param target Unit | Structure
 ---@return boolean
 function Structure:IsTargetInRange(target)
-	local dx = target.Position.X - self.Position.X
-	local dy = target.Position.Y - self.Position.Y
-	local distSq = dx * dx + dy * dy
-	local attackRange = rawget(self, "AttackRange") or 0
-	local range = attackRange + self:GetTargetRadius(target)
-	return distSq <= (range * range)
+	return TargetingSystem.IsTargetWithinRange(self, target, rawget(self, "AttackRange") or 0)
 end
 
 --- Checks if the target is within aggro range.
 ---@param target Unit | Structure
 ---@return boolean
 function Structure:IsTargetInAggroRange(target)
-	local dx = target.Position.X - self.Position.X
-	local dy = target.Position.Y - self.Position.Y
-	local distSq = dx * dx + dy * dy
-	local aggroRange = rawget(self, "AggroRange") or 0
-	local range = aggroRange + self:GetTargetRadius(target)
-	return distSq <= (range * range)
+	return TargetingSystem.IsTargetWithinRange(self, target, rawget(self, "AggroRange") or 0)
 end
 
 --- Searches for the closest enemy within aggro range.
 ---@param entities WorldEntities
 ---@return Unit | Structure | nil
 function Structure:SearchForEnemy(entities)
-	return entities:FindClosestEnemy(self, function(target)
+	return TargetingSystem.SearchForEnemy(self, entities, function(target)
 		return self:IsTargetInAggroRange(target)
 	end)
 end
@@ -118,7 +106,7 @@ end
 ---@param entities WorldEntities
 ---@return Unit | Structure | nil
 function Structure:SearchForEnemyToAttack(entities)
-	return entities:FindClosestEnemy(self, function(target)
+	return TargetingSystem.SearchForEnemy(self, entities, function(target)
 		return self:IsTargetInRange(target)
 	end)
 end
@@ -127,53 +115,35 @@ end
 ---@param target Unit | Structure | nil
 ---@return boolean
 function Structure:CanKeepCurrentTarget(target)
-	if not target then
-		return false
-	end
-	if not self:IsTargetAlive(target) or not self:IsTargetEnemy(target) then
-		return false
-	end
-	return self:IsTargetInAggroRange(target)
+	return TargetingSystem.CanKeepTarget(self, target, {
+		range = rawget(self, "AggroRange") or 0,
+	})
 end
 
 --- Checks if the structure can keep its retaliation target.
 ---@param target Unit | Structure | nil
 ---@return boolean
 function Structure:CanKeepRetaliationTarget(target)
-	if not target then
-		return false
-	end
-	if not self:IsTargetAlive(target) or not self:IsTargetEnemy(target) then
-		return false
-	end
-	return self:IsTargetInRange(target)
+	return TargetingSystem.CanKeepTarget(self, target, {
+		range = rawget(self, "AttackRange") or 0,
+	})
 end
 
 --- Locks retaliation to the first valid attacker until that target becomes invalid.
 ---@param attacker Unit | Structure | nil
 function Structure:OnDamaged(attacker)
-	if not attacker then
-		return
-	end
-	if not self:IsTargetEnemy(attacker) then
-		return
-	end
-	if self:CanKeepRetaliationTarget(self.RetaliationTarget) then
-		return
-	end
-	self.RetaliationTarget = attacker
-	self.CurrentTarget = attacker
+	TargetingSystem.OnDamaged(self, attacker, Structure.CanKeepRetaliationTarget)
 end
 
 --- Refreshes the current target of the structure.
 ---@param entities WorldEntities
 ---@return Unit | Structure | nil
 function Structure:RefreshTarget(entities)
-	if self:CanKeepCurrentTarget(self.CurrentTarget) then
-		return self.CurrentTarget
-	end
-	self.CurrentTarget = self:SearchForEnemy(entities)
-	return self.CurrentTarget
+	return TargetingSystem.RefreshTarget(self, entities, {
+		canKeepCurrentTarget = Structure.CanKeepCurrentTarget,
+		canKeepRetaliationTarget = Structure.CanKeepRetaliationTarget,
+		searchForEnemy = Structure.SearchForEnemy,
+	})
 end
 
 --- Updates the combat state of the structure.

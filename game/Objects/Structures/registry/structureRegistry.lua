@@ -23,19 +23,4 @@ function StructureRegistry.GetByType(structureType)
 	return STRUCTURE_CLASS_BY_TYPE[structureType]
 end
 
---- Registers or overrides a structure class for the given type id.
----@param structureType string
----@param structureClass table
----@return boolean True if registration succeeded, otherwise false.
-function StructureRegistry.Register(structureType, structureClass)
-	if type(structureType) ~= "string" or structureType == "" then
-		return false
-	end
-	if type(structureClass) ~= "table" or type(structureClass.new) ~= "function" then
-		return false
-	end
-	STRUCTURE_CLASS_BY_TYPE[structureType] = structureClass
-	return true
-end
-
 return StructureRegistry

@@ -134,24 +134,4 @@ function NavigationSystem.GetPathTargetPoint(unit, entities)
 	return waypoint.X, waypoint.Y
 end
 
---- Returns a fallback position for the unit along its path.
----@param unit table
----@param entities WorldEntities
----@return number | nil, number | nil
-function NavigationSystem.GetPathFallbackPosition(unit, entities)
-	local waypointX, waypointY = NavigationSystem.GetPathTargetPoint(unit, entities)
-	if not waypointX or not waypointY then
-		return nil, nil
-	end
-
-	local dx = waypointX - unit.Position.X
-	local dy = waypointY - unit.Position.Y
-	local dist = math.sqrt(dx * dx + dy * dy)
-	if dist <= 0 then
-		return unit.Position.X, unit.Position.Y
-	end
-
-	return unit.Position.X + (dx / dist) * unit.Speed, unit.Position.Y + (dy / dist) * unit.Speed
-end
-
 return NavigationSystem
