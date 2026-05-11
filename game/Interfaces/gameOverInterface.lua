@@ -1,0 +1,120 @@
+--- MainMenuButtons module
+
+local Button = require("BaseClasses.button")
+local GameStateTransitions = require("src.gameStateTransitions")
+
+local BASE_BUTTON_WIDTH = 200
+local BASE_BUTTON_HEIGHT = 50
+local BASE_SPACING_Y = 60
+
+
+--- @class GameOverInterface
+--- @field ReStartButton Button
+--- @field MenuButton Button
+--- @field QuitButton Button
+local GameOverInterface = {}
+GameOverInterface.__index = GameOverInterface
+
+--- Creates a new GameOverInterface table.
+---@return GameOverInterface
+function GameOverInterface:new()
+	local newButtons = setmetatable({}, self)
+
+	local definitions = {
+		{ key = "ReStartButton", name = "ReStart", text = "Restart Game", action = function() GameStateTransitions.EnterNewGame() end },
+		{ key = "MenuButton",    name = "Menu",    text = "Main Menu",   action = function() GameStateTransitions.EnterMenu() end },
+		{ key = "QuitButton",    name = "Quit",    text = "Quit Game",   action = function() love.event.quit() end },
+	}
+
+	for index, definition in ipairs(definitions) do
+		newButtons[definition.key] = Button:new(
+			definition.name,
+			definition.action,
+			BASE_BUTTON_WIDTH,
+			BASE_BUTTON_HEIGHT,
+			definition.text,
+			{ X = 0, Y = 0 },
+			{ X = 0, Y = 15 }
+		)
+	end
+
+	newButtons:RebuildLayout()
+
+	return newButtons
+end
+
+--- Recomputes button positions based on current window size.
+function GameOverInterface:RebuildLayout()
+	local width, height = love.graphics.getDimensions()
+	local scale = math.min(width / 1280, height / 720)
+	scale = math.max(0.75, math.min(1.6, scale))
+
+	local buttonWidth = math.floor(BASE_BUTTON_WIDTH * scale + 0.5)
+	local buttonHeight = math.floor(BASE_BUTTON_HEIGHT * scale + 0.5)
+	local spacingY = math.floor(BASE_SPACING_Y * scale + 0.5)
+
+	local startY = height / 2
+	local centerX = width / 2 - buttonWidth / 2
+	local textOffsetY = math.floor(buttonHeight * 0.3 + 0.5)
+
+	self.ReStartButton.Width = buttonWidth
+	self.ReStartButton.Height = buttonHeight
+	self.ReStartButton.PositionText.Y = textOffsetY
+
+	self.ReStartButton.PositionButton.X = centerX
+	self.ReStartButton.PositionButton.Y = startY
+
+	self.MenuButton.Width = buttonWidth
+	self.MenuButton.Height = buttonHeight
+	self.MenuButton.PositionText.Y = textOffsetY
+
+	self.MenuButton.PositionButton.X = centerX
+	self.MenuButton.PositionButton.Y = startY + spacingY
+
+	self.QuitButton.Width = buttonWidth
+	self.QuitButton.Height = buttonHeight
+	self.QuitButton.PositionText.Y = textOffsetY
+
+	self.QuitButton.PositionButton.X = centerX
+	self.QuitButton.PositionButton.Y = startY + (2 * spacingY)
+end
+
+--- Draws all the Game Over buttons
+function GameOverInterface:Draw()
+	self.ReStartButton:Draw()
+	self.MenuButton:Draw()
+	self.QuitButton:Draw()
+end
+
+--- Checks if any of the buttons are pressed based on the mouse position and cursor radius.
+--- if a button is pressed, its associated action will be executed.
+---@param PositionMouse {X: number, Y: number}
+---@param CursorRadius number
+---@return boolean True if any game over button was pressed, otherwise false.
+function GameOverInterface:IsPressed(PositionMouse, CursorRadius)
+	if self.ReStartButton:IsPressed(PositionMouse, CursorRadius) then
+		return true
+	end
+	if self.MenuButton:IsPressed(PositionMouse, CursorRadius) then
+		return true
+	end
+	if self.QuitButton:IsPressed(PositionMouse, CursorRadius) then
+		return true
+	end
+	return false
+end
+
+--- Handles a raw mouse press event for the game over screen.
+---@param x number
+---@param y number
+---@param button number
+---@return boolean True if a game over button handled the click.
+function GameOverInterface:HandleMousePressed(x, y, button)
+	if button ~= 1 then
+		return false
+	end
+	return self:IsPressed({ X = x, Y = y }, 0)
+end
+
+
+return GameOverInterface

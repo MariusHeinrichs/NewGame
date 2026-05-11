@@ -1,5 +1,4 @@
 --- World module — manages all active game entities.
-
 local StructurePlacement = require("Objects.Structures.placement.structurePlacement")
 local StructureRegistry = require("Objects.Structures.registry.structureRegistry")
 local CombatSystem = require("Systems.combatSystem")
@@ -9,6 +8,8 @@ local ProjectileSystem = require("Systems.projectileSystem")
 local SpawnSystem = require("Systems.spawnSystem")
 local WorldTransformSystem = require("Systems.worldTransformSystem")
 local WorldEntities = require("src.worldEntities")
+local GameContext = require("src.gameContext")
+local GameStateModes = require("src.gameStateModes")
 
 ---@class World
 ---@field Entities WorldEntities
@@ -102,7 +103,7 @@ function World:PlaceStructure(selectedStructureType, resources, x, y, team)
 	return false, reason
 end
 
---- Updates all entities. Moves units, removes dead ones, spawns new ones from structures.
+--- Updates all entities. Moves units, removes dead ones, spawns new ones from structures and checks for game over conditions.
 ---@param dt number
 function World:Update(dt)
 	local units = self.Entities:GetUnits()
@@ -119,6 +120,13 @@ function World:Update(dt)
 
 	-- Phase 4: structure-based spawns and structure cleanup.
 	SpawnSystem.Update(self.Entities, structures, dt)
+
+	-- Phase 5: check if a townhall has been destroyed and end the game if so.
+	local playerTownHall = self.Entities:GetEnemyTownHall("enemy")
+	local enemyTownHall = self.Entities:GetEnemyTownHall("player")
+	if not playerTownHall or not enemyTownHall then
+		GameContext.GameState.Mode = GameStateModes.GAME_OVER
+	end
 end
 
 --- Draws all entities.

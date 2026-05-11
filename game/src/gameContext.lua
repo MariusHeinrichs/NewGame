@@ -16,6 +16,7 @@ local GameContext = {
 		Start = nil,
 		MainMenu = nil,
 		Pause = nil,
+		GameOver = nil,
 	},
 }
 

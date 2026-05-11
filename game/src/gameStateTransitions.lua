@@ -48,4 +48,9 @@ function GameStateTransitions.EnterStart()
 	GameContext.GameState.Mode = GameStateModes.START
 end
 
+--- Enters the game over screen from running gameplay.
+function GameStateTransitions.EnterGameOver()
+	GameContext.GameState.Mode = GameStateModes.GAME_OVER
+end
+
 return GameStateTransitions

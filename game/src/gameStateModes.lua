@@ -5,6 +5,7 @@ local GameStateModes = {
 	MENU = "menu",
 	RUNNING = "running",
 	PAUSE = "pause",
+	GAME_OVER = "game_over",
 }
 
 return GameStateModes

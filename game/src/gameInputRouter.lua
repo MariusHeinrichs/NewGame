@@ -53,7 +53,7 @@ end
 ---@return boolean handled
 function GameInputRouter.HandleMousePressed(x, y, button)
 	local gameState = GameContext.GameState
-	---@type { MainMenu: MainMenuInterface | nil, Battle: BattleInterface | nil, Pause: PauseInterface | nil }
+	---@type { MainMenu: MainMenuInterface | nil, Battle: BattleInterface | nil, Pause: PauseInterface | nil, GameOver: GameOverInterface | nil }
 	local interfaces = GameContext.Interfaces
 
 	if gameState.Mode == GameStateModes.MENU then
@@ -73,6 +73,13 @@ function GameInputRouter.HandleMousePressed(x, y, button)
 	if gameState.Mode == GameStateModes.PAUSE then
 		if interfaces.Pause then
 			interfaces.Pause:HandleMousePressed(x, y, button)
+		end
+		return true
+	end
+
+	if gameState.Mode == GameStateModes.GAME_OVER then
+		if interfaces.GameOver then
+			interfaces.GameOver:HandleMousePressed(x, y, button)
 		end
 		return true
 	end

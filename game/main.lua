@@ -2,6 +2,7 @@ local MainMenuInterface = require("Interfaces.mainMenuInterface")
 local PauseInterface = require("Interfaces.pauseInterface")
 local StartInterface = require("Interfaces.startInterface")
 local CombatOverlayInterface = require("Interfaces.combatOverlayInterface")
+local GameOverInterface = require("Interfaces.gameOverInterface")
 local MatchSetup = require("Systems.matchSetup")
 local GameStateModes = require("src.gameStateModes")
 local GameContext = require("src.gameContext")
@@ -10,7 +11,7 @@ local GameInputRouter = require("src.gameInputRouter")
 local gameState = GameContext.GameState
 ---@type { World: World | nil, Resources: Resources | nil, HasInitializedMatch: boolean, EnemyBuilderAI: { Update: fun(self: table, dt: number): nil } | nil }
 local runtime = GameContext.Runtime
----@type { Battle: BattleInterface | nil, CombatOverlay: CombatOverlayInterface | nil, MainMenu: MainMenuInterface | nil, Pause: PauseInterface | nil, Start: StartInterface | nil }
+---@type { Battle: BattleInterface | nil, CombatOverlay: CombatOverlayInterface | nil, MainMenu: MainMenuInterface | nil, Pause: PauseInterface | nil, Start: StartInterface | nil, GameOver: GameOverInterface | nil }
 local interfaces = GameContext.Interfaces
 
 function love.load()
@@ -19,6 +20,7 @@ function love.load()
 	interfaces.MainMenu = MainMenuInterface:new()
 	interfaces.Pause = PauseInterface:new()
 	interfaces.CombatOverlay = CombatOverlayInterface:new()
+	interfaces.GameOver = GameOverInterface:new()
 	GameInputRouter.InitializeHandlers()
 end
 
@@ -74,6 +76,12 @@ function love.draw()
 		end
 		interfaces.Pause:Draw()
 	end
+
+	if gameState.Mode == GameStateModes.GAME_OVER then
+		if interfaces.GameOver then
+			interfaces.GameOver:Draw()
+		end
+	end
 end
 
 function love.resize(w, h)
@@ -92,5 +100,8 @@ function love.resize(w, h)
 	end
 	if interfaces.Pause then
 		interfaces.Pause:RebuildLayout()
+	end
+	if interfaces.GameOver then
+		interfaces.GameOver:RebuildLayout()
 	end
 end
